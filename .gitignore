@@ -6,6 +6,13 @@
 !README.md
 !LICENSE.md
 !gitworkflow.md
+!CLAUDE.md
+!.claude/**/*.md
+!docs/**/*.md
+
+# Personal Claude Code overrides — never shared
+CLAUDE.local.md
+.claude/settings.local.json
 
 # Secrets — never commit
 .env
