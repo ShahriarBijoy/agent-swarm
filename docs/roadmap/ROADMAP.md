@@ -52,7 +52,17 @@ Phases 08, 09, 10 are parallel-safe once 07 lands — multiple worktrees OK per 
 - No multi-tenant org separation beyond what Better Auth ships by default (portfolio scope).
 - No production-grade on-call / alerting beyond Langfuse traces.
 - qmd is explicitly out (plan §6): pgvector owns retrieval.
-- Max-subscription OAuth is out (plan §2): `ANTHROPIC_API_KEY` from day one.
+
+## Auth for the Agent SDK (overrides plan §2)
+
+Auto-ride is a **non-commercial personal portfolio project** — the plan doc's §2 warning about the Feb 2026 Anthropic terms applies only to commercial use. For this build, Max subscription OAuth is the intended path per `CLAUDE.md`. Anthropic staff have publicly clarified (Thariq Shihipar, Claude Code team) that personal/side-project SDK use on a Max subscription is not what the doc cleanup was meant to prohibit, and the LiteLLM tutorial "Using Claude Code Max Subscription" documents the proxy pattern end-to-end.
+
+Two workable paths, either is fine for this project:
+
+1. **Direct OAuth via `claude setup-token`** → sets `CLAUDE_CODE_OAUTH_TOKEN` from a Pro/Max subscription. Community demos (e.g. `weidwonder/claude_agent_sdk_oauth_demo`) show this working against the Agent SDK.
+2. **LiteLLM Max-subscription proxy** → run LiteLLM locally with Max pass-through, point the SDK at it via `ANTHROPIC_BASE_URL=http://localhost:4000` + `ANTHROPIC_AUTH_TOKEN=<litellm-master-key>`. More resilient to any future SDK auth-precedence changes because the SDK sees only a bearer-token gateway.
+
+An `ANTHROPIC_API_KEY` from `console.anthropic.com` remains the fallback if Auto-ride ever turns commercial, but **is not required to build or demo this project**. Phase 05 picks whichever path you prefer at the time.
 
 ## Per-phase checklist (copy into each phase PR body)
 

@@ -140,7 +140,12 @@ DATABASE_URL="postgresql://user:pass@ep-xxx-pooler.region.aws.neon.tech/autoride
 DATABASE_URL_UNPOOLED="postgresql://user:pass@ep-xxx.region.aws.neon.tech/autoride?sslmode=require"
 
 # Later phases will append:
-#   ANTHROPIC_API_KEY         (phase 05)
+#   CLAUDE_CODE_OAUTH_TOKEN   (phase 05, Max-subscription path via `claude setup-token`)
+#     OR
+#   ANTHROPIC_BASE_URL +      (phase 05, LiteLLM Max-passthrough proxy path)
+#   ANTHROPIC_AUTH_TOKEN      (phase 05)
+#     OR
+#   ANTHROPIC_API_KEY         (phase 05, only if this project ever turns commercial)
 #   GOOGLE_GENAI_API_KEY      (phase 03)
 #   INNGEST_EVENT_KEY         (phase 06)
 #   INNGEST_SIGNING_KEY       (phase 06)
