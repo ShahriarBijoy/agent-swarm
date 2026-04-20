@@ -1,3 +1,6 @@
-// Phase 02 will populate this barrel with memory + task + approval tables.
-// Keeping the file so drizzle.config.ts has a valid schema glob from phase 01.
-export {};
+export * from './enums';
+export * from './types';
+export * from './memories';
+export * from './cleanup';
+export * from './tasks';
+export * from './approvals';
