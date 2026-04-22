@@ -1,6 +1,5 @@
-import { config } from 'dotenv';
-config({ path: '.env.local' });
-
+// Env is loaded by `tsx --env-file=.env.local` in package.json's `recall:demo` script.
+// Running this file directly without that flag will fail env validation in lib/env.ts.
 import { sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { memories } from '@/db/schema/memories';
