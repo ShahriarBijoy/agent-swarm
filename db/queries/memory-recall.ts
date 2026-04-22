@@ -15,6 +15,8 @@ export interface RecallArgs {
   segment?: SegmentValue;
   /** Max rows to return (1-50). */
   topK: number;
+  /** When true, hit rows are reinforced (importance boost + access_count + last_accessed_at) in one bulk UPDATE and post-boost values are merged into the returned rows. Default false. */
+  reinforceHits?: boolean;
 }
 
 export interface RecallRow {
@@ -98,6 +100,19 @@ export async function recallMemories(args: RecallArgs): Promise<RecallRow[]> {
     )
     .orderBy(desc(score))
     .limit(topK);
+
+  if (args.reinforceHits && rows.length > 0) {
+    const { reinforceMemories } = await import('@/db/queries/memory-lifecycle');
+    const boosted = await reinforceMemories(rows.map((r) => r.id));
+    const byId = new Map(boosted.map((b) => [b.id, b.importance]));
+    for (const row of rows) {
+      const newImp = byId.get(row.id);
+      if (newImp !== undefined) {
+        // Mutate the returned row to reflect post-boost importance.
+        (row as { importance: string }).importance = newImp.toFixed(2);
+      }
+    }
+  }
 
   return rows as RecallRow[];
 }
