@@ -2,6 +2,7 @@ import { and, cosineDistance, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { memories, memorySegmentConfig } from '@/db/schema/memories';
 import { segmentEnum } from '@/db/schema/enums';
+import { effectiveImportanceSql } from '@/lib/memory/decay-sql';
 
 export type SegmentValue = (typeof segmentEnum.enumValues)[number];
 
@@ -14,6 +15,8 @@ export interface RecallArgs {
   segment?: SegmentValue;
   /** Max rows to return (1-50). */
   topK: number;
+  /** When true, hit rows are reinforced (importance boost + access_count + last_accessed_at) in one bulk UPDATE and post-boost values are merged into the returned rows. Default false. */
+  reinforceHits?: boolean;
 }
 
 export interface RecallRow {
@@ -67,17 +70,14 @@ export async function recallMemories(args: RecallArgs): Promise<RecallRow[]> {
     to_tsvector('english', ${candidateWindow.content}),
     plainto_tsquery('english', ${queryText})
   ))`;
-  const ageDays = sql<number>`(extract(epoch from now() - ${candidateWindow.lastAccessedAt}) / 86400.0)`;
-  // λ: 0 for permanent, config.decay_lambda_short for short,
-  //    config.decay_lambda_long_factor * (1 - 0.8 * importance) for long.
-  const lambda = sql<number>`(
-    CASE ${candidateWindow.bucket}
-      WHEN 'permanent' THEN 0
-      WHEN 'short' THEN ${memorySegmentConfig.decayLambdaShort}
-      WHEN 'long'  THEN ${memorySegmentConfig.decayLambdaLongFactor} * (1 - 0.8 * ${candidateWindow.importance}::float8)
-    END
-  )`;
-  const effImp = sql<number>`(${candidateWindow.importance}::float8 * exp(-${lambda} * ${ageDays}))`;
+  const effImp = effectiveImportanceSql({
+    bucket: candidateWindow.bucket,
+    importance: candidateWindow.importance,
+    lastAccessed: candidateWindow.lastAccessedAt,
+    decayLambdaShort: memorySegmentConfig.decayLambdaShort,
+    decayLambdaLongFactor: memorySegmentConfig.decayLambdaLongFactor,
+    // asOf: defaults to now()
+  });
   const score = sql<number>`(0.55 * ${cosineSim} + 0.25 * ${tsRank} + 0.20 * ${effImp})`;
 
   const rows = await db
@@ -100,6 +100,19 @@ export async function recallMemories(args: RecallArgs): Promise<RecallRow[]> {
     )
     .orderBy(desc(score))
     .limit(topK);
+
+  if (args.reinforceHits && rows.length > 0) {
+    const { reinforceMemories } = await import('@/db/queries/memory-lifecycle');
+    const boosted = await reinforceMemories(rows.map((r) => r.id));
+    const byId = new Map(boosted.map((b) => [b.id, b.importance]));
+    for (const row of rows) {
+      const newImp = byId.get(row.id);
+      if (newImp !== undefined) {
+        // Mutate the returned row to reflect post-boost importance.
+        (row as { importance: string }).importance = newImp.toFixed(2);
+      }
+    }
+  }
 
   return rows as RecallRow[];
 }

@@ -66,6 +66,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm db:migrate` | Apply pending migrations (via `DATABASE_URL_UNPOOLED`) |
 | `pnpm db:studio` | Open drizzle-kit studio |
 | `pnpm recall:demo` | Seed memories, embed a query via Gemini, print ranked recall (phase 03) |
+| `pnpm memory:demo` | End-to-end memory lifecycle dry-run: write six memories, recall with auto-reinforce, explicit reinforce, forget, evaluate promotion proposal, evaluate tombstone-expiry candidate, clean up (phase 04) |
 
 ## Phase status
 

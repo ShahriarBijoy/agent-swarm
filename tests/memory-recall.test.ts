@@ -144,6 +144,51 @@ skipSuite('phase-03 memory-recall integration', () => {
     });
     expect(planJson).toMatch(/memories_embedding_hnsw_idx/);
   });
+
+  it('does not reinforce rows when reinforceHits is false (default)', async () => {
+    // Seed a fresh row with a known importance; recall twice without reinforce; ensure no mutation.
+    const [seed] = await rawSql<Array<{ id: string }>>`
+      INSERT INTO memories (segment, bucket, content, importance, embedding, metadata)
+      VALUES ('knowledge', 'short', 'no-reinforce probe', '0.50',
+        ${JSON.stringify(basisPerturbed(5, 0))}::vector,
+        ${rawSql.json({ test_id: TEST_ID })})
+      RETURNING id
+    `;
+    await recallMemories({
+      queryVector: basisPerturbed(5, 0, 0.001),
+      queryText: 'probe',
+      topK: 3,
+    });
+    const [after] = await rawSql<Array<{ importance: string }>>`
+      SELECT importance FROM memories WHERE id = ${seed!.id}
+    `;
+    expect(after!.importance).toBe('0.50');
+  });
+
+  it('reinforces every returned row when reinforceHits is true', async () => {
+    const [seed] = await rawSql<Array<{ id: string }>>`
+      INSERT INTO memories (segment, bucket, content, importance, embedding, metadata)
+      VALUES ('knowledge', 'short', 'reinforce probe', '0.60',
+        ${JSON.stringify(basisPerturbed(6, 0))}::vector,
+        ${rawSql.json({ test_id: TEST_ID })})
+      RETURNING id
+    `;
+    const rows = await recallMemories({
+      queryVector: basisPerturbed(6, 0, 0.001),
+      queryText: 'probe',
+      topK: 3,
+      reinforceHits: true,
+    });
+    // returned row reflects post-boost importance: 0.60 + 0.05*0.40 = 0.62
+    const hit = rows.find((r) => r.id === seed!.id);
+    expect(hit?.importance).toBe('0.62');
+    // DB also updated
+    const [after] = await rawSql<Array<{ importance: string; access_count: number }>>`
+      SELECT importance, access_count FROM memories WHERE id = ${seed!.id}
+    `;
+    expect(after!.importance).toBe('0.62');
+    expect(after!.access_count).toBe(1);
+  });
 });
 
 describe.skip('[live] Gemini recall round-trip', () => {
