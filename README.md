@@ -6,21 +6,23 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 - Git workflow: [`gitworkflow.md`](./gitworkflow.md)
 - Contributor guide: [`CLAUDE.md`](./CLAUDE.md)
 
-## Quickstart (through phase 02)
+## Quickstart (through phase 03)
 
 **Prerequisites**
 - Node ≥22, pnpm ≥9
 - A Neon project with **pgvector enabled** (Neon dashboard → Project → Extensions → toggle `vector` on)
+- A Gemini API key from [Google AI Studio](https://aistudio.google.com/app/apikey) (free tier is enough)
 
 **Setup**
 
-1. Copy env template and fill in both Neon URLs:
+1. Copy env template and fill in the required keys:
    ```bash
    cp .env.example .env.local
    ```
    `.env.local` needs:
    - `DATABASE_URL` — Neon **pooled** URL (hostname contains `-pooler`)
    - `DATABASE_URL_UNPOOLED` — Neon direct URL
+   - `GEMINI_API_KEY` — Google AI Studio key for memory embeddings (phase 03)
 
 2. Install and migrate:
    ```bash
@@ -45,6 +47,12 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
    -- 7 rows, identity 0.90 → context 0.40
    ```
 
+5. Phase 03 end-to-end sanity check — seed a handful of memories, embed a real query via Gemini, print ranked recall results, clean up:
+   ```bash
+   pnpm recall:demo
+   ```
+   The top row for `"when is the next oil change due for my lease vehicle?"` should be the lease-oil-change fixture.
+
 ## Scripts
 
 | Script | Purpose |
@@ -57,6 +65,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm db:generate` | Generate a Drizzle migration |
 | `pnpm db:migrate` | Apply pending migrations (via `DATABASE_URL_UNPOOLED`) |
 | `pnpm db:studio` | Open drizzle-kit studio |
+| `pnpm recall:demo` | Seed memories, embed a query via Gemini, print ranked recall (phase 03) |
 
 ## Phase status
 
