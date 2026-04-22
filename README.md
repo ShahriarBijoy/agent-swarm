@@ -6,7 +6,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 - Git workflow: [`gitworkflow.md`](./gitworkflow.md)
 - Contributor guide: [`CLAUDE.md`](./CLAUDE.md)
 
-## Quickstart (phase 01)
+## Quickstart (through phase 02)
 
 **Prerequisites**
 - Node ≥22, pnpm ≥9
@@ -37,6 +37,12 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
    ```bash
    curl -s http://localhost:3000/health | jq
    # { "ok": true, "checks": { "db": "up", "vector": "installed" }, ... }
+   ```
+
+   After phase 02, `pnpm db:migrate` also creates the nine core tables (`memories`, `memory_segment_config`, `memory_links`, `memory_cleanup_runs`, `memory_cleanup_proposals`, `tasks`, `task_runs`, `task_events`, `approval_gates`) and seeds seven `memory_segment_config` rows. Verify with `pnpm db:studio` or:
+   ```sql
+   SELECT segment, default_importance FROM memory_segment_config ORDER BY default_importance DESC;
+   -- 7 rows, identity 0.90 → context 0.40
    ```
 
 ## Scripts
