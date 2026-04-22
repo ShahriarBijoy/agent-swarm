@@ -1,4 +1,4 @@
-import { and, cosineDistance, eq, isNull, sql } from 'drizzle-orm';
+import { and, cosineDistance, desc, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { memories, memorySegmentConfig } from '@/db/schema/memories';
 import { segmentEnum } from '@/db/schema/enums';
@@ -60,24 +60,25 @@ export async function recallMemories(args: RecallArgs): Promise<RecallRow[]> {
     .limit(topK * HNSW_CANDIDATE_MULTIPLIER)
     .as('cand');
 
-  // 2) rerank via hybrid score in SQL (no JS arithmetic)
-  const cosineSim = sql<number>`1 - ${candidateWindow.distance}`;
-  const tsRank = sql<number>`ts_rank_cd(
+  // 2) rerank via hybrid score in SQL (no JS arithmetic).
+  // Each fragment is parenthesized so precedence holds when composed into `score`.
+  const cosineSim = sql<number>`(1 - ${candidateWindow.distance})`;
+  const tsRank = sql<number>`(ts_rank_cd(
     to_tsvector('english', ${candidateWindow.content}),
     plainto_tsquery('english', ${queryText})
-  )`;
-  const ageDays = sql<number>`extract(epoch from now() - ${candidateWindow.lastAccessedAt}) / 86400.0`;
+  ))`;
+  const ageDays = sql<number>`(extract(epoch from now() - ${candidateWindow.lastAccessedAt}) / 86400.0)`;
   // λ: 0 for permanent, config.decay_lambda_short for short,
   //    config.decay_lambda_long_factor * (1 - 0.8 * importance) for long.
-  const lambda = sql<number>`
+  const lambda = sql<number>`(
     CASE ${candidateWindow.bucket}
       WHEN 'permanent' THEN 0
       WHEN 'short' THEN ${memorySegmentConfig.decayLambdaShort}
-      WHEN 'long'  THEN ${memorySegmentConfig.decayLambdaLongFactor} * (1 - 0.8 * ${candidateWindow.importance})
+      WHEN 'long'  THEN ${memorySegmentConfig.decayLambdaLongFactor} * (1 - 0.8 * ${candidateWindow.importance}::float8)
     END
-  `;
-  const effImp = sql<number>`${candidateWindow.importance}::float8 * exp(-${lambda} * ${ageDays})`;
-  const score = sql<number>`0.55 * ${cosineSim} + 0.25 * ${tsRank} + 0.20 * ${effImp}`;
+  )`;
+  const effImp = sql<number>`(${candidateWindow.importance}::float8 * exp(-${lambda} * ${ageDays}))`;
+  const score = sql<number>`(0.55 * ${cosineSim} + 0.25 * ${tsRank} + 0.20 * ${effImp})`;
 
   const rows = await db
     .select({
@@ -97,7 +98,7 @@ export async function recallMemories(args: RecallArgs): Promise<RecallRow[]> {
       memorySegmentConfig,
       eq(memorySegmentConfig.segment, candidateWindow.segment),
     )
-    .orderBy(sql`score DESC`)
+    .orderBy(desc(score))
     .limit(topK);
 
   return rows as RecallRow[];
