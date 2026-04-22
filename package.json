@@ -19,7 +19,8 @@
     "test:watch": "vitest",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "recall:demo": "tsx scripts/recall-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.117",
