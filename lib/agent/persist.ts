@@ -106,17 +106,20 @@ function mapUserMessage(msg: UserMessage): TaskEventInput[] {
   const content = msg.message.content;
 
   if (Array.isArray(content)) {
-    const toolResults = content.filter(isToolResultBlock);
-    if (toolResults.length > 0) {
-      return toolResults.map((block) => ({
-        type: 'tool_result',
-        payload: {
-          tool_use_id: block.tool_use_id,
-          is_error: block.is_error ?? false,
-          content: block.content,
-        },
-      }));
+    const events: TaskEventInput[] = [];
+    for (const block of content) {
+      if (isToolResultBlock(block)) {
+        events.push({
+          type: 'tool_result',
+          payload: {
+            tool_use_id: block.tool_use_id,
+            is_error: block.is_error ?? false,
+            content: block.content,
+          },
+        });
+      }
     }
+    if (events.length > 0) return events;
   }
 
   return [

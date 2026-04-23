@@ -51,7 +51,7 @@ describe('loadAgentAuthEnv', () => {
     vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'sk-ant-oat01-xxxxx');
     const out = loadAgentAuthEnv();
     expect(out.kind).toBe('api_key');
-    const logged = errSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    const logged = errSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(logged).toMatch(/both .* API key takes precedence/);
   });
 
@@ -61,7 +61,7 @@ describe('loadAgentAuthEnv', () => {
     vi.stubEnv('CLAUDE_CODE_OAUTH_TOKEN', 'sk-ant-oat01-xxxxx');
     const out = loadAgentAuthEnv();
     expect(out.kind).toBe('gateway');
-    const logged = errSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    const logged = errSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(logged).toMatch(/gateway takes precedence/);
   });
 

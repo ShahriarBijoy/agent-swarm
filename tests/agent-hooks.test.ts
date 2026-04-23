@@ -46,7 +46,7 @@ describe('auditPreToolUse', () => {
       'toolu_1',
       { signal: new AbortController().signal } as unknown as Parameters<typeof auditPreToolUse>[2],
     );
-    const logged = errSpy.mock.calls.map((c) => String(c[0])).join('\n');
+    const logged = errSpy.mock.calls.map((c: unknown[]) => String(c[0])).join('\n');
     expect(logged).toContain('tool=mcp__memory__recall');
   });
 
@@ -61,7 +61,7 @@ describe('auditPreToolUse', () => {
       'toolu_2',
       { signal: new AbortController().signal } as unknown as Parameters<typeof auditPreToolUse>[2],
     );
-    const calls = errSpy.mock.calls.map((c) => String(c[0]));
+    const calls = errSpy.mock.calls.map((c: unknown[]) => String(c[0]));
     expect(calls[0]).toContain('[audit] subagent fleet-analyst');
     expect(calls[1]).toContain('[audit] orchestrator');
   });
