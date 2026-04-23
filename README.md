@@ -6,7 +6,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 - Git workflow: [`gitworkflow.md`](./gitworkflow.md)
 - Contributor guide: [`CLAUDE.md`](./CLAUDE.md)
 
-## Quickstart (through phase 03)
+## Quickstart (through phase 05)
 
 **Prerequisites**
 - Node ≥22, pnpm ≥9
@@ -53,6 +53,29 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
    ```
    The top row for `"when is the next oil change due for my lease vehicle?"` should be the lease-oil-change fixture.
 
+6. Phase 04 end-to-end lifecycle dry-run — write six memories, recall with auto-reinforce, explicit reinforce, forget, evaluate a promotion proposal, evaluate a tombstone-expiry candidate, clean up:
+   ```bash
+   pnpm memory:demo
+   ```
+
+7. **Phase 05 — first `query()`.** One orchestrator (`claude-sonnet-4-6`) + one Haiku subagent (`fleet-analyst`), wired to the memory MCP, with every SDK message persisted to `task_events`. Requires Anthropic auth (in addition to the phase-03 DB + Gemini keys). Set **exactly one** of:
+
+   | Path | Env vars |
+   |---|---|
+   | OAuth (Pro/Max subscription) | `CLAUDE_CODE_OAUTH_TOKEN` — run `claude setup-token` in a Claude Code session |
+   | Gateway / LiteLLM proxy | `ANTHROPIC_BASE_URL` + `ANTHROPIC_AUTH_TOKEN` |
+   | Direct API key | `ANTHROPIC_API_KEY` (from [console.anthropic.com](https://console.anthropic.com)) |
+
+   Decision tree: [`docs/roadmap/ROADMAP.md` → "Auth for the Agent SDK"](./docs/roadmap/ROADMAP.md#auth-for-the-agent-sdk-overrides-plan-2).
+
+   Then run the demo:
+   ```bash
+   pnpm query:demo "Check the fleet and summarize today's maintenance priorities."
+   ```
+   (Omit the argument to use the default fleet-health prompt.) The script seeds two memories, invokes `runOrchestrator`, streams every `task_events` row to stdout, verifies contiguous seq, and cleans up the seeds. `tasks` / `task_runs` / `task_events` rows stay behind — inspect via `pnpm db:studio`.
+
+   Phase 03's `pnpm recall:demo` and phase 04's `pnpm memory:demo` do **not** require Anthropic auth; only `pnpm query:demo` does.
+
 ## Scripts
 
 | Script | Purpose |
@@ -67,6 +90,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm db:studio` | Open drizzle-kit studio |
 | `pnpm recall:demo` | Seed memories, embed a query via Gemini, print ranked recall (phase 03) |
 | `pnpm memory:demo` | End-to-end memory lifecycle dry-run: write six memories, recall with auto-reinforce, explicit reinforce, forget, evaluate promotion proposal, evaluate tombstone-expiry candidate, clean up (phase 04) |
+| `pnpm query:demo` | First real `query()`: orchestrator + fleet-analyst subagent + memory MCP + task_events persistence, CLI-driven. Accepts a prompt as argv. Requires Anthropic auth (see quickstart step 7). (phase 05) |
 
 ## Phase status
 

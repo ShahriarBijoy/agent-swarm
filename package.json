@@ -21,7 +21,8 @@
     "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "recall:demo": "tsx --env-file=.env.local scripts/recall-demo.ts",
-    "memory:demo": "tsx --env-file=.env.local scripts/memory-demo.ts"
+    "memory:demo": "tsx --env-file=.env.local scripts/memory-demo.ts",
+    "query:demo": "tsx --env-file=.env.local scripts/query-demo.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.117",
