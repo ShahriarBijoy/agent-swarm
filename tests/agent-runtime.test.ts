@@ -45,10 +45,14 @@ describe.skip('[live] Haiku round-trip', () => {
           .where(eq(taskEvents.runId, result.runId))
           .orderBy(taskEvents.seq);
 
-        expect(events.length).toBeGreaterThanOrEqual(3);
+        // A minimal prompt with no tool use yields at least one
+        // assistant_turn + one run_result. `user_message` events only appear
+        // when the SDK emits a synthetic user turn (Agent delegation /
+        // tool_result), which this prompt deliberately avoids to keep the
+        // assertion set tight.
+        expect(events.length).toBeGreaterThanOrEqual(2);
 
         const types = events.map((e) => e.type);
-        expect(types).toContain('user_message');
         expect(types).toContain('assistant_turn');
         expect(types.filter((t) => t === 'run_result')).toHaveLength(1);
 
@@ -56,6 +60,17 @@ describe.skip('[live] Haiku round-trip', () => {
         events.forEach((e, i) => {
           expect(e.seq).toBe(i);
         });
+
+        // Only task_events types allowed by the phase-02 check constraint.
+        const allowed = new Set([
+          'assistant_turn',
+          'tool_call',
+          'tool_result',
+          'compact_boundary',
+          'run_result',
+          'user_message',
+        ]);
+        for (const t of types) expect(allowed.has(t)).toBe(true);
       } finally {
         await db.delete(taskEvents).where(eq(taskEvents.runId, result.runId));
         await db.delete(taskRuns).where(eq(taskRuns.id, result.runId));
