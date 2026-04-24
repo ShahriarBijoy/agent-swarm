@@ -1,4 +1,5 @@
 import { createQueuedTask } from '@/db/queries/task-api';
+import { finalizeTask } from '@/db/queries/task-runtime';
 import { startTask } from '@/lib/runner/start-task';
 import { createTaskBodySchema } from '@/lib/validation/task-body';
 
@@ -22,8 +23,9 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  let id: string | undefined;
   try {
-    const { id, createdAt } = await createQueuedTask({
+    const created = await createQueuedTask({
       prompt: parsed.data.prompt,
       ...(parsed.data.maxBudgetUsd !== undefined
         ? { maxBudgetUsd: parsed.data.maxBudgetUsd }
@@ -33,11 +35,14 @@ export async function POST(req: Request): Promise<Response> {
         : {}),
       createdBy: 'http',
     });
+    id = created.id;
 
-    // Fire-and-forget the runner. Errors are captured inside startTask and
-    // persisted to the task row as status='failed'.
-    startTask({
-      taskId: id,
+    // Phase 07: this dispatches an Inngest event instead of fire-and-
+    // forgetting in-process. Errors before the event is accepted (network,
+    // schema mismatch) are caught below; anything that goes wrong inside
+    // the orchestrator now bubbles through Inngest's retry semantics.
+    await startTask({
+      taskId: created.id,
       prompt: parsed.data.prompt,
       ...(parsed.data.maxBudgetUsd !== undefined
         ? { maxBudgetUsd: parsed.data.maxBudgetUsd }
@@ -49,15 +54,24 @@ export async function POST(req: Request): Promise<Response> {
 
     return Response.json(
       {
-        taskId: id,
+        taskId: created.id,
         status: 'queued' as const,
-        createdAt: createdAt.toISOString(),
+        createdAt: created.createdAt.toISOString(),
       },
       { status: 200 },
     );
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error('[api/tasks] createQueuedTask failed:', message);
+    console.error('[api/tasks] dispatch failed:', message);
+    // If the task row was created but the Inngest send failed, finalize it
+    // to `failed` so the SSE stream terminates instead of polling forever.
+    if (id) {
+      try {
+        await finalizeTask({ taskId: id, status: 'failed' });
+      } catch {
+        // ignore — original error is what we report
+      }
+    }
     return Response.json(
       { error: 'internal', message },
       { status: 500 },
