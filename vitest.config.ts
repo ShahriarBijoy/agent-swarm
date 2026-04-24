@@ -5,7 +5,7 @@ export default defineConfig({
   test: {
     environment: 'node',
     globals: false,
-    include: ['tests/**/*.test.ts'],
+    include: ['tests/**/*.test.{ts,tsx}'],
     setupFiles: ['tests/setup.ts'],
     // Integration tests share the Neon DB. Parallel file execution causes
     // seed rows from one suite to leak into another's cosine-similarity

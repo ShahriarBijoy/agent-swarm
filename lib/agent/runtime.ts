@@ -9,6 +9,7 @@ import {
   finalizeTask,
   updateTaskRunSession,
 } from '@/db/queries/task-runtime';
+import { getTaskById, markTaskInProgress } from '@/db/queries/task-api';
 import {
   buildOrchestratorOptions,
   type BuildOrchestratorOptionsOverrides,
@@ -20,6 +21,13 @@ import {
 
 export type RunOrchestratorArgs = {
   prompt: string;
+  /**
+   * Phase-06 HTTP path: pass an existing `queued` task's id and the runner
+   * will transition it to `in_progress` and reuse the row. If omitted
+   * (phase-05 CLI path), a fresh `tasks` row is created with status
+   * `in_progress`. Non-breaking: existing callers keep working.
+   */
+  taskId?: string;
   maxBudgetUsd?: number;
   maxTurns?: number;
   maxThinkingTokens?: number;
@@ -48,14 +56,34 @@ export type RunOrchestratorResult = {
 export async function runOrchestrator(
   args: RunOrchestratorArgs,
 ): Promise<RunOrchestratorResult> {
+  // Validate taskId first (cheap DB read) before touching auth, so a bad
+  // taskId throws the actionable "not found" / "terminal state" error
+  // regardless of whether Anthropic creds are configured.
+  let taskId: string;
+  if (args.taskId) {
+    const existing = await getTaskById(args.taskId);
+    if (!existing) {
+      throw new Error(`runOrchestrator: task ${args.taskId} not found`);
+    }
+    if (existing.status !== 'queued' && existing.status !== 'in_progress') {
+      throw new Error(
+        `runOrchestrator: task ${args.taskId} is ${existing.status}, cannot run`,
+      );
+    }
+    await markTaskInProgress(args.taskId);
+    taskId = args.taskId;
+  } else {
+    const { id } = await createTask({
+      prompt: args.prompt,
+      maxBudgetUsd: args.maxBudgetUsd,
+      maxTurns: args.maxTurns,
+      createdBy: args.createdBy ?? 'cli',
+    });
+    taskId = id;
+  }
+
   const auth = loadAgentAuthEnv();
 
-  const { id: taskId } = await createTask({
-    prompt: args.prompt,
-    maxBudgetUsd: args.maxBudgetUsd,
-    maxTurns: args.maxTurns,
-    createdBy: args.createdBy ?? 'cli',
-  });
   const { id: runId } = await createTaskRun({ taskId });
 
   const overrides: BuildOrchestratorOptionsOverrides = {
