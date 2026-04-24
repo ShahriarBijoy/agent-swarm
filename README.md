@@ -6,7 +6,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 - Git workflow: [`gitworkflow.md`](./gitworkflow.md)
 - Contributor guide: [`CLAUDE.md`](./CLAUDE.md)
 
-## Quickstart (through phase 06)
+## Quickstart (through phase 07)
 
 **Prerequisites**
 - Node ≥22, pnpm ≥9
@@ -101,13 +101,50 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
    # id: 1\nevent: task_event\ndata: {...}\n\n ... event: done\n\n
    ```
 
-   **Known limitation (phase-06 scope):** the POST handler fires the runner via `Promise.resolve().then(...)` — so in Turbopack dev, a hot-reload **while a task is running** kills the process; the `tasks` row is left `in_progress` with no terminal event, and the SSE stream polls forever. Don't edit files mid-run during the demo. Phase 07 introduces Inngest `waitForEvent` for durability.
+   **Known limitation (phase-06 scope, lifted in phase 07):** the POST handler fired the runner via `Promise.resolve().then(...)` — so in Turbopack dev, a hot-reload **while a task is running** killed the process; the `tasks` row was left `in_progress` with no terminal event. Phase 07 routes the runner through Inngest's durable workflow so this is no longer a problem.
+
+9. **Phase 07 — HITL approvals.** A `canUseTool` gate pauses the orchestrator before risky tool calls (any `mcp__stripe__*`, non-whitelisted `Bash`, `Write` to `^src/`); the `<ApprovalBar>` on `/tasks/[id]` surfaces the gate; clicking **Approve / Modify / Deny** unblocks the SDK via Inngest. The whole orchestrator run lives inside an Inngest function so it survives a server restart mid-wait.
+
+   This phase needs a second terminal for the Inngest dev server. Three terminals total:
+
+   ```bash
+   # Terminal 1 — Next.js
+   pnpm dev
+
+   # Terminal 2 — Inngest event broker (auto-discovers the functions on /api/inngest)
+   pnpm inngest:dev
+   ```
+
+   The Inngest UI lands at [http://localhost:8288](http://localhost:8288).
+
+   **Demo a happy-path approval:**
+
+   - Open `http://localhost:3000/tasks` and create a task with a prompt that nudges the orchestrator toward a gated tool, e.g.:
+     ```
+     Use Bash to delete the file at /tmp/auto-ride-demo. Run "rm -rf /tmp/auto-ride-demo".
+     ```
+   - On `/tasks/<uuid>`, the timeline streams normally until the orchestrator emits a `tool_call` for `Bash` with a non-whitelisted command. The task transitions to `awaiting_approval`, an amber **awaiting approval** banner appears with the proposed input, and an inline `<ApprovalRequest>` card lands in the timeline.
+   - Click **Approve**. The gate row flips to `approved`, a `subtype: 'resolved'` event is emitted, the SDK resumes, and the run completes with the usual `<RunResult>` summary.
+   - **Modify** opens a JSON textarea so you can rewrite `proposed_input` (e.g. narrow the path). The SDK receives `{ behavior: 'allow', updatedInput: <your JSON> }` and runs the modified call.
+   - **Deny** sends `{ behavior: 'deny', message: <reason> }` to the SDK, which the orchestrator typically reacts to by giving up or proposing an alternative.
+
+   **Demo restart survival:**
+
+   1. Trigger an approval as above. Stop on the amber bar (do *not* click any button yet).
+   2. `Ctrl+C` Terminal 1 (`pnpm dev`). Wait two seconds. Restart `pnpm dev`.
+   3. Refresh `/tasks/<uuid>` — the approval bar still shows the same gate (read from `approval_gates` rather than in-memory state).
+   4. Click **Approve**. Inngest delivers `auto-ride/approval.decided`; the function picks up at the durable `step.waitForEvent` boundary; the run completes.
+
+   **Caveats**
+   - In Turbopack dev, hot-reload during an active SDK call still resets the in-process conversation — Inngest replays the function from the top. The gate row is preserved; the approval still completes; the orchestrator just rebuilds the conversation. Phase 12's sandbox process makes this seamless.
+   - The Server Action has no auth in phase 07; treat the dev server as local-only. Phase 11's Better Auth gates it.
 
 ## Scripts
 
 | Script | Purpose |
 |---|---|
 | `pnpm dev` | Next.js dev server with Turbopack |
+| `pnpm inngest:dev` | Inngest CLI dev server on port 8288 — durable workflow broker for phase 07 HITL (run alongside `pnpm dev`) |
 | `pnpm build` / `pnpm start` | Production build / server |
 | `pnpm test` / `pnpm test:watch` | vitest |
 | `pnpm typecheck` | `tsc --noEmit` under strict |
