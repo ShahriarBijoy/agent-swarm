@@ -191,9 +191,10 @@ skipSuite('phase-07 approval-gates queries', () => {
       await resolveGate({ id, status: 'approved' });
       const second = await resolveGate({ id, status: 'denied' });
       expect(second.ok).toBe(false);
-      if (!second.ok) {
-        expect(second.reason).toBe('already_resolved');
+      if (!second.ok && second.reason === 'already_resolved') {
         expect(second.status).toBe('approved');
+      } else {
+        throw new Error('expected already_resolved branch');
       }
     });
 

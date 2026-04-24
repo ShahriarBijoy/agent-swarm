@@ -11,20 +11,17 @@ import { shouldRequireApproval } from '@/lib/agent/approval-policy';
 /**
  * Subset of Inngest's `step` API consumed by the canUseTool callback.
  *
- * Defined structurally so this module doesn't import from `inngest` directly
- * — keeps the unit test (`tests/approvals-canusetool.test.ts`) entirely
- * dependency-free and lets the real Inngest `Step` type satisfy this
- * interface by structural compatibility.
+ * Defined structurally — non-generic in the event name so plain literal
+ * fakes in tests satisfy the type without `as never` casts. The real
+ * Inngest `step` shape is far richer, so an `as unknown as DurableStep`
+ * cast at the production call site (lib/inngest/functions.ts) is the only
+ * adapter point.
  */
 export interface DurableStep {
-  waitForEvent<TName extends string>(
+  waitForEvent(
     id: string,
-    opts: {
-      event: TName;
-      timeout: string;
-      if?: string;
-    },
-  ): Promise<{ name: TName; data: Record<string, unknown> } | null>;
+    opts: { event: string; timeout: string; if?: string },
+  ): Promise<{ name: string; data: Record<string, unknown> } | null>;
 }
 
 /**

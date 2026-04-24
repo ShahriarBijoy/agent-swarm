@@ -40,16 +40,34 @@ export async function createTaskRun(args: {
   taskId: string;
   attempt?: number;
 }): Promise<{ id: string }> {
+  // Phase 07: when no attempt is provided, compute MAX(attempt) + 1 for the
+  // task. The Inngest replay path re-enters runOrchestrator on the same
+  // taskId; without this each replay would conflict on the
+  // (task_id, attempt) unique index.
+  const attempt =
+    args.attempt ??
+    (await nextAttemptForTask(args.taskId));
+
   const [row] = await db
     .insert(taskRuns)
     .values({
       taskId: args.taskId,
-      attempt: args.attempt ?? 1,
+      attempt,
       status: 'in_progress',
     })
     .returning({ id: taskRuns.id });
   if (!row) throw new Error('createTaskRun: insert returned no row');
   return { id: row.id };
+}
+
+async function nextAttemptForTask(taskId: string): Promise<number> {
+  const result = (await db.execute(sql`
+    SELECT COALESCE(MAX(attempt), 0) AS max_attempt
+    FROM task_runs WHERE task_id = ${taskId}
+  `)) as unknown as { rows?: Array<{ max_attempt: number | string }> } | Array<{ max_attempt: number | string }>;
+  const rows = Array.isArray(result) ? result : (result.rows ?? []);
+  const raw = rows[0]?.max_attempt ?? 0;
+  return Number(raw) + 1;
 }
 
 export async function appendTaskEvent(args: {

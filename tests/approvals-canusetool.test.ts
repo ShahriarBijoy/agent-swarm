@@ -25,12 +25,29 @@ function makeStep(
   } as DurableStep & { calls: number };
 }
 
+type OpenGateArgs = {
+  id: string;
+  runId: string;
+  taskId: string;
+  toolName: string;
+  proposedInput: unknown;
+};
+type AppendArgs = {
+  runId: string;
+  taskId: string;
+  type: string;
+  payload: Record<string, unknown>;
+};
+
 function makeDeps() {
-  const openGate = vi.fn(async () => {});
-  const expireGate = vi.fn(async () => ({ ok: true as const }));
-  const markTaskAwaitingApproval = vi.fn(async () => {});
-  const markTaskResumed = vi.fn(async () => {});
-  const appendTaskEventAuto = vi.fn(async () => ({ id: 1n, seq: 0 }));
+  const openGate = vi.fn(async (_args: OpenGateArgs) => {});
+  const expireGate = vi.fn(async (_id: string) => ({ ok: true as const }));
+  const markTaskAwaitingApproval = vi.fn(async (_taskId: string) => {});
+  const markTaskResumed = vi.fn(async (_taskId: string) => {});
+  const appendTaskEventAuto = vi.fn(async (_args: AppendArgs) => ({
+    id: 1n,
+    seq: 0,
+  }));
   const generateGateId = vi.fn(() => 'gate-aaaa-1111');
   return {
     openGate,
