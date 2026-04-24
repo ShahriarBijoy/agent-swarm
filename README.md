@@ -6,7 +6,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 - Git workflow: [`gitworkflow.md`](./gitworkflow.md)
 - Contributor guide: [`CLAUDE.md`](./CLAUDE.md)
 
-## Quickstart (through phase 05)
+## Quickstart (through phase 06)
 
 **Prerequisites**
 - Node ≥22, pnpm ≥9
@@ -75,6 +75,33 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
    (Omit the argument to use the default fleet-health prompt.) The script seeds two memories, invokes `runOrchestrator`, streams every `task_events` row to stdout, verifies contiguous seq, and cleans up the seeds. `tasks` / `task_runs` / `task_events` rows stay behind — inspect via `pnpm db:studio`.
 
    Phase 03's `pnpm recall:demo` and phase 04's `pnpm memory:demo` do **not** require Anthropic auth; only `pnpm query:demo` does.
+
+8. **Phase 06 — task API + SSE timeline.** Same orchestrator, different kickoff path: create a task through a Next.js form, watch the timeline render live in the browser as events land in `task_events`.
+
+   ```bash
+   pnpm dev
+   ```
+
+   Then in the browser:
+
+   - Open `http://localhost:3000/tasks`
+   - Type a prompt (e.g. `Check the fleet.`), click **Create task**
+   - Redirects to `/tasks/<uuid>` — the timeline streams live via SSE
+   - `<UserMessage>` → `<AssistantTurn>` → `<ToolCall>` → `<ToolResult>` → … → `<RunResult>` with cost + turns + duration
+
+   Or script it via curl:
+
+   ```bash
+   curl -s -X POST http://localhost:3000/api/tasks \
+     -H 'content-type: application/json' \
+     -d '{"prompt":"Check the fleet."}'
+   # {"taskId":"...","status":"queued","createdAt":"..."}
+
+   curl -N http://localhost:3000/api/tasks/<taskId>/stream
+   # id: 1\nevent: task_event\ndata: {...}\n\n ... event: done\n\n
+   ```
+
+   **Known limitation (phase-06 scope):** the POST handler fires the runner via `Promise.resolve().then(...)` — so in Turbopack dev, a hot-reload **while a task is running** kills the process; the `tasks` row is left `in_progress` with no terminal event, and the SSE stream polls forever. Don't edit files mid-run during the demo. Phase 07 introduces Inngest `waitForEvent` for durability.
 
 ## Scripts
 
