@@ -1,4 +1,5 @@
 import type { TimelineEvent } from './types';
+import { ApprovalRequest } from './ApprovalRequest';
 import { AssistantTurn } from './AssistantTurn';
 import { CompactBoundary } from './CompactBoundary';
 import { RunResult } from './RunResult';
@@ -16,6 +17,8 @@ export function TimelineEventRenderer({ event }: { event: TimelineEvent }) {
       return <ToolCall seq={event.seq} payload={event.payload} />;
     case 'tool_result':
       return <ToolResult seq={event.seq} payload={event.payload} />;
+    case 'approval_request':
+      return <ApprovalRequest seq={event.seq} payload={event.payload} />;
     case 'compact_boundary':
       return <CompactBoundary seq={event.seq} payload={event.payload} />;
     case 'run_result':
