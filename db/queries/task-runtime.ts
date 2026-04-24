@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { taskEvents, taskRuns, tasks } from '@/db/schema';
 
@@ -66,6 +66,66 @@ export async function appendTaskEvent(args: {
     type: args.type,
     payload: args.payload,
   });
+}
+
+/**
+ * Phase-07 seq-safe append. Computes `seq = MAX(seq) + 1` for the run inside
+ * the same INSERT statement, so the SDK runner and the Server Action that
+ * resolves an approval never collide on the `(run_id, seq)` unique index.
+ *
+ * Retries up to 3 times on unique-violation. Returns the assigned seq so the
+ * caller's in-memory cursor stays in sync with the DB.
+ */
+export async function appendTaskEventAuto(args: {
+  runId: string;
+  taskId: string;
+  type: string;
+  payload: Record<string, unknown>;
+}): Promise<{ id: bigint; seq: number }> {
+  const MAX_ATTEMPTS = 3;
+  let attempt = 0;
+
+  while (attempt < MAX_ATTEMPTS) {
+    attempt += 1;
+    try {
+      const result = (await db.execute(sql`
+        INSERT INTO task_events (run_id, task_id, seq, type, payload)
+        VALUES (
+          ${args.runId},
+          ${args.taskId},
+          COALESCE((SELECT MAX(seq) FROM task_events WHERE run_id = ${args.runId}), -1) + 1,
+          ${args.type},
+          ${JSON.stringify(args.payload)}::jsonb
+        )
+        RETURNING id, seq
+      `)) as unknown as { rows?: Array<{ id: string | bigint; seq: number }> } | Array<{ id: string | bigint; seq: number }>;
+
+      const rows = Array.isArray(result) ? result : (result.rows ?? []);
+      const row = rows[0];
+      if (!row) {
+        throw new Error('appendTaskEventAuto: insert returned no row');
+      }
+      return {
+        id: typeof row.id === 'bigint' ? row.id : BigInt(row.id),
+        seq: Number(row.seq),
+      };
+    } catch (err) {
+      if (isUniqueViolation(err) && attempt < MAX_ATTEMPTS) continue;
+      throw err;
+    }
+  }
+  throw new Error('appendTaskEventAuto: exhausted retries on seq conflict');
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) return false;
+  const code = (err as { code?: unknown }).code;
+  if (code === '23505') return true;
+  const message = (err as { message?: unknown }).message;
+  return (
+    typeof message === 'string' &&
+    /duplicate key value|task_events_run_seq/.test(message)
+  );
 }
 
 export async function updateTaskRunSession(args: {
