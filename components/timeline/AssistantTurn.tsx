@@ -1,0 +1,71 @@
+type AssistantContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'thinking'; thinking: string }
+  | { type: 'tool_use'; id: string; name: string; input: unknown }
+  | { type: string; [k: string]: unknown };
+
+function extractBlocks(payload: Record<string, unknown>): AssistantContentBlock[] {
+  const message = payload.message as { content?: unknown } | undefined;
+  const content = message?.content;
+  if (Array.isArray(content)) return content as AssistantContentBlock[];
+  if (typeof content === 'string') return [{ type: 'text', text: content }];
+  return [];
+}
+
+export function AssistantTurn({
+  seq,
+  payload,
+}: {
+  seq: number;
+  payload: Record<string, unknown>;
+}) {
+  const blocks = extractBlocks(payload);
+  const textBlocks = blocks.filter(
+    (b): b is { type: 'text'; text: string } => b.type === 'text',
+  );
+  const thinkingBlocks = blocks.filter(
+    (b): b is { type: 'thinking'; thinking: string } => b.type === 'thinking',
+  );
+
+  return (
+    <article
+      data-type="assistant_turn"
+      className="flex flex-col gap-2 rounded-md border border-border bg-card p-4"
+    >
+      <header className="flex items-baseline justify-between text-xs text-muted-foreground">
+        <span className="uppercase tracking-wide">assistant</span>
+        <span className="font-mono">{`seq=${seq}`}</span>
+      </header>
+      {thinkingBlocks.length > 0 && (
+        <details className="text-xs text-muted-foreground">
+          <summary className="cursor-pointer select-none">
+            thinking ({thinkingBlocks.length})
+          </summary>
+          <div className="mt-1 space-y-1">
+            {thinkingBlocks.map((b, i) => (
+              <pre
+                key={i}
+                className="whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs"
+              >
+                {b.thinking}
+              </pre>
+            ))}
+          </div>
+        </details>
+      )}
+      {textBlocks.length > 0 ? (
+        <div className="space-y-2 text-sm leading-relaxed">
+          {textBlocks.map((b, i) => (
+            <p key={i} className="whitespace-pre-wrap">
+              {b.text}
+            </p>
+          ))}
+        </div>
+      ) : (
+        <p className="text-sm text-muted-foreground italic">
+          (no text blocks — tool_use shown separately below)
+        </p>
+      )}
+    </article>
+  );
+}
