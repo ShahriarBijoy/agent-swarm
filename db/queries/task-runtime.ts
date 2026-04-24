@@ -100,7 +100,13 @@ export async function appendTaskEventAuto(args: {
   type: string;
   payload: Record<string, unknown>;
 }): Promise<{ id: bigint; seq: number }> {
-  const MAX_ATTEMPTS = 3;
+  // Phase 07 has at most two writers per run (the SDK runner + the
+  // resolveApproval Server Action), but the parallel-writer test exercises
+  // 20 concurrent inserts to validate correctness under contention. Each
+  // collision retries with the next MAX(seq), so attempt count must exceed
+  // the worst-case retry chain (~log2(N) under random jitter).
+  const MAX_ATTEMPTS = 12;
+  const BASE_BACKOFF_MS = 5;
   let attempt = 0;
 
   while (attempt < MAX_ATTEMPTS) {
@@ -116,7 +122,9 @@ export async function appendTaskEventAuto(args: {
           ${JSON.stringify(args.payload)}::jsonb
         )
         RETURNING id, seq
-      `)) as unknown as { rows?: Array<{ id: string | bigint; seq: number }> } | Array<{ id: string | bigint; seq: number }>;
+      `)) as unknown as
+        | { rows?: Array<{ id: string | bigint; seq: number }> }
+        | Array<{ id: string | bigint; seq: number }>;
 
       const rows = Array.isArray(result) ? result : (result.rows ?? []);
       const row = rows[0];
@@ -128,22 +136,43 @@ export async function appendTaskEventAuto(args: {
         seq: Number(row.seq),
       };
     } catch (err) {
-      if (isUniqueViolation(err) && attempt < MAX_ATTEMPTS) continue;
+      if (isUniqueViolation(err) && attempt < MAX_ATTEMPTS) {
+        // Tiny exponential backoff with jitter so 20 concurrent retriers
+        // don't immediately re-collide on the same MAX(seq) value.
+        const delay = Math.floor(
+          BASE_BACKOFF_MS * Math.pow(1.5, attempt - 1) * (0.5 + Math.random()),
+        );
+        await sleep(delay);
+        continue;
+      }
       throw err;
     }
   }
   throw new Error('appendTaskEventAuto: exhausted retries on seq conflict');
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function isUniqueViolation(err: unknown): boolean {
-  if (typeof err !== 'object' || err === null) return false;
-  const code = (err as { code?: unknown }).code;
-  if (code === '23505') return true;
-  const message = (err as { message?: unknown }).message;
-  return (
-    typeof message === 'string' &&
-    /duplicate key value|task_events_run_seq/.test(message)
-  );
+  // Drizzle wraps the Neon NeonDbError in a DrizzleQueryError; the pg
+  // SQLSTATE 23505 lives on the wrapped cause. Walk the cause chain.
+  let cursor: unknown = err;
+  for (let i = 0; i < 4 && cursor !== null && cursor !== undefined; i += 1) {
+    if (typeof cursor !== 'object') break;
+    const code = (cursor as { code?: unknown }).code;
+    if (code === '23505') return true;
+    const message = (cursor as { message?: unknown }).message;
+    if (
+      typeof message === 'string' &&
+      /duplicate key value|task_events_run_seq/.test(message)
+    ) {
+      return true;
+    }
+    cursor = (cursor as { cause?: unknown }).cause;
+  }
+  return false;
 }
 
 export async function updateTaskRunSession(args: {

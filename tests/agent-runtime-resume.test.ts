@@ -6,9 +6,41 @@ import postgres from 'postgres';
  * - awaiting_approval is now a resumable state (Inngest function replay).
  * - Each entry creates a fresh task_runs row with a bumped attempt number.
  *
- * Tests stop before query() is invoked by mocking the SDK, so no Anthropic
- * credentials are required — only DB access.
+ * The SDK is partially mocked (importOriginal preserves `tool` and friends
+ * that lib/mcp/memory.ts pulls at module scope) so no Anthropic credentials
+ * are required — only DB access.
  */
+vi.mock('@anthropic-ai/claude-agent-sdk', async (importOriginal) => {
+  const actual = await importOriginal<
+    typeof import('@anthropic-ai/claude-agent-sdk')
+  >();
+  return {
+    ...actual,
+    query: () => {
+      async function* mockStream() {
+        yield {
+          type: 'system',
+          subtype: 'init',
+          session_id: 'mock-session',
+        } as never;
+        yield {
+          type: 'result',
+          subtype: 'success',
+          result: 'mock-final-text',
+          total_cost_usd: 0,
+          duration_ms: 0,
+          duration_api_ms: 0,
+          num_turns: 1,
+          usage: { input_tokens: 0, output_tokens: 0 },
+          modelUsage: {},
+          uuid: 'mock-uuid',
+          session_id: 'mock-session',
+        } as never;
+      }
+      return mockStream();
+    },
+  };
+});
 
 const url = process.env.DATABASE_URL_UNPOOLED;
 const skipSuite = url ? describe : describe.skip;
@@ -31,36 +63,8 @@ skipSuite('phase-07 runOrchestrator resumability', () => {
     await rawSql.end();
   });
 
-  // Mock the SDK at module-level so query() resolves instantly with a single
-  // result message. This keeps the test focused on the resume validation
-  // path, not the SDK integration.
-  vi.mock('@anthropic-ai/claude-agent-sdk', async () => {
-    return {
-      query: ({ options: _options }: { options: unknown }) => {
-        async function* mockStream() {
-          yield {
-            type: 'system',
-            subtype: 'init',
-            session_id: 'mock-session',
-          } as never;
-          yield {
-            type: 'result',
-            subtype: 'success',
-            result: 'mock-final-text',
-            total_cost_usd: 0,
-            duration_ms: 0,
-            duration_api_ms: 0,
-            num_turns: 1,
-            usage: { input_tokens: 0, output_tokens: 0 },
-            modelUsage: {},
-            uuid: 'mock-uuid',
-            session_id: 'mock-session',
-          } as never;
-        }
-        return mockStream();
-      },
-    };
-  });
+  // Body intentionally empty — the vi.mock call below is hoisted to the top
+  // of the file by vitest before any imports run.
 
   it('admits awaiting_approval as a resumable state', async () => {
     const { createQueuedTask } = await import('@/db/queries/task-api');
