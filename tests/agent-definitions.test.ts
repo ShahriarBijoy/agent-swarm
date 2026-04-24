@@ -60,17 +60,28 @@ describe('buildOrchestratorOptions', () => {
     expect(ORCHESTRATOR_MODEL).toBe('claude-sonnet-4-6');
   });
 
-  it('includes Agent + Read + all four memory FQNs in allowedTools', () => {
+  it('includes Agent + Read + Bash + Write + all four memory FQNs in allowedTools', () => {
     const opts = buildOrchestratorOptions();
     expect(opts.allowedTools).toEqual([
       'Agent',
       'Read',
+      'Bash',
+      'Write',
       RECALL_TOOL_FQN,
       WRITE_TOOL_FQN,
       REINFORCE_TOOL_FQN,
       FORGET_TOOL_FQN,
     ]);
     expect([...ORCHESTRATOR_ALLOWED_TOOLS]).toEqual(opts.allowedTools);
+  });
+
+  it('omits canUseTool by default and threads it when supplied', () => {
+    const noOverride = buildOrchestratorOptions();
+    expect(noOverride.canUseTool).toBeUndefined();
+
+    const stub = async () => ({ behavior: 'allow' as const });
+    const withOverride = buildOrchestratorOptions({ canUseTool: stub });
+    expect(withOverride.canUseTool).toBe(stub);
   });
 
   it('registers the memory MCP server under MEMORY_SERVER_NAME', () => {

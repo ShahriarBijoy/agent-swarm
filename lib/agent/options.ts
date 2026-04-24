@@ -1,4 +1,4 @@
-import type { Options } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, Options } from '@anthropic-ai/claude-agent-sdk';
 import {
   FORGET_TOOL_FQN,
   MEMORY_SERVER_NAME,
@@ -21,6 +21,11 @@ export const DEFAULT_MAX_THINKING_TOKENS = 8192;
 export const ORCHESTRATOR_ALLOWED_TOOLS: readonly string[] = [
   'Agent',
   'Read',
+  // Phase 07 admits Bash + Write because the canUseTool gate now controls
+  // them (write to source / non-whitelisted Bash → human approval). Without
+  // them in allowedTools the SDK refuses outright before canUseTool fires.
+  'Bash',
+  'Write',
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
@@ -32,6 +37,12 @@ export type BuildOrchestratorOptionsOverrides = {
   maxTurns?: number;
   maxThinkingTokens?: number;
   cwd?: string;
+  /**
+   * Phase-07 HITL gate. When set, the SDK pauses on each tool call and
+   * routes the decision through this callback. Undefined = allow-all
+   * within `allowedTools` (phase-05 CLI path).
+   */
+  canUseTool?: CanUseTool;
 };
 
 /**
@@ -58,5 +69,6 @@ export function buildOrchestratorOptions(
     maxThinkingTokens: overrides.maxThinkingTokens ?? DEFAULT_MAX_THINKING_TOKENS,
     settingSources: ['project'],
     cwd: overrides.cwd ?? process.cwd(),
+    ...(overrides.canUseTool ? { canUseTool: overrides.canUseTool } : {}),
   };
 }
