@@ -6,11 +6,16 @@ import {
   type TaskEventRow,
   type TaskRow,
 } from '@/db/queries/task-api';
+import {
+  listPendingForTask,
+  type GateSummary,
+} from '@/db/queries/approval-gates';
 import type {
   TerminalSummary,
   TimelineEvent,
   TimelineEventType,
 } from '@/components/timeline/types';
+import { ApprovalBar } from './approval-bar';
 import { TimelineStream } from './timeline-stream';
 
 export const dynamic = 'force-dynamic';
@@ -36,6 +41,21 @@ function terminalFromTask(task: TaskRow): TerminalSummary | null {
   return null;
 }
 
+function serializeGate(g: GateSummary): GateSummary {
+  // The page passes server-fetched gates to a client component; createdAt
+  // serializes as Date which Next handles, but we explicitly clone to a
+  // plain object to avoid leaking drizzle row internals.
+  return {
+    id: g.id,
+    runId: g.runId,
+    taskId: g.taskId,
+    toolName: g.toolName,
+    proposedInput: g.proposedInput,
+    status: g.status,
+    createdAt: g.createdAt,
+  };
+}
+
 export default async function TaskPage({
   params,
 }: {
@@ -45,9 +65,13 @@ export default async function TaskPage({
   const task = await getTaskById(id);
   if (!task) notFound();
 
-  const rows = await getEventsSince({ taskId: id, afterId: 0n, limit: 500 });
+  const [rows, pendingGatesRaw] = await Promise.all([
+    getEventsSince({ taskId: id, afterId: 0n, limit: 500 }),
+    listPendingForTask(id),
+  ]);
   const initialEvents = serializeEvents(rows);
   const initialTerminal = terminalFromTask(task);
+  const initialGates = pendingGatesRaw.map(serializeGate);
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
@@ -73,6 +97,8 @@ export default async function TaskPage({
         <p className="text-sm whitespace-pre-wrap">{task.prompt}</p>
         <p className="font-mono text-xs text-muted-foreground">{task.id}</p>
       </header>
+
+      <ApprovalBar taskId={task.id} initialGates={initialGates} />
 
       <TimelineStream
         taskId={task.id}
