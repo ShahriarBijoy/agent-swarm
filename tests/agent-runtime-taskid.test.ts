@@ -13,6 +13,13 @@ skipSuite('phase-06 runOrchestrator taskId validation', () => {
   const TEST_MARK = 'phase-06-taskid-test';
 
   async function deleteTestTasks() {
+    // task_events.task_id has no ON DELETE CASCADE — clear events first.
+    await rawSql`
+      DELETE FROM task_events
+      WHERE task_id IN (
+        SELECT id FROM tasks WHERE metadata->>'test_id' = ${TEST_MARK}
+      )
+    `;
     await rawSql`DELETE FROM tasks WHERE metadata->>'test_id' = ${TEST_MARK}`;
   }
 

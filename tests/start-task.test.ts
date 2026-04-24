@@ -123,10 +123,12 @@ describe('phase-06 startTask', () => {
     await flushMicrotasks();
 
     // Expect both log lines: the runner rejection + the finalize-also-failed.
-    const calls = consoleErrorSpy.mock.calls.map((c) => String(c[0] ?? ''));
-    expect(calls.some((c) => c.includes('runner rejected'))).toBe(true);
-    expect(calls.some((c) => c.includes('finalize-to-failed also failed'))).toBe(
-      true,
+    const calls: string[] = consoleErrorSpy.mock.calls.map(
+      (c: unknown[]) => String(c[0] ?? ''),
     );
+    expect(calls.some((c: string) => c.includes('runner rejected'))).toBe(true);
+    expect(
+      calls.some((c: string) => c.includes('finalize-to-failed also failed')),
+    ).toBe(true);
   });
 });

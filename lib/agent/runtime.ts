@@ -56,8 +56,9 @@ export type RunOrchestratorResult = {
 export async function runOrchestrator(
   args: RunOrchestratorArgs,
 ): Promise<RunOrchestratorResult> {
-  const auth = loadAgentAuthEnv();
-
+  // Validate taskId first (cheap DB read) before touching auth, so a bad
+  // taskId throws the actionable "not found" / "terminal state" error
+  // regardless of whether Anthropic creds are configured.
   let taskId: string;
   if (args.taskId) {
     const existing = await getTaskById(args.taskId);
@@ -80,6 +81,8 @@ export async function runOrchestrator(
     });
     taskId = id;
   }
+
+  const auth = loadAgentAuthEnv();
 
   const { id: runId } = await createTaskRun({ taskId });
 

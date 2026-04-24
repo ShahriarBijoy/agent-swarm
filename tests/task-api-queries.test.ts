@@ -9,8 +9,15 @@ skipSuite('phase-06 task-api queries', () => {
   const TEST_MARK = 'phase-06-api-test';
 
   async function deleteTestTasks() {
-    // FK cascade: tasks → task_runs → task_events. Deleting tasks removes
-    // everything downstream.
+    // task_events.task_id FK has no ON DELETE CASCADE (only run_id does),
+    // so we clear task_events first, then let the tasks → task_runs cascade
+    // handle the rest.
+    await rawSql`
+      DELETE FROM task_events
+      WHERE task_id IN (
+        SELECT id FROM tasks WHERE metadata->>'test_id' = ${TEST_MARK}
+      )
+    `;
     await rawSql`DELETE FROM tasks WHERE metadata->>'test_id' = ${TEST_MARK}`;
   }
 
