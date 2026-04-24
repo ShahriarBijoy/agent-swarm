@@ -44,6 +44,9 @@ Thumbs.db
 # Testing
 /coverage
 
+# Playwright MCP browser artifacts (screenshots go to docs/; console logs aren't tracked)
+.playwright-mcp/
+
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
