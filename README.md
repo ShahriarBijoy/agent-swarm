@@ -136,7 +136,8 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
    4. Click **Approve**. Inngest delivers `auto-ride/approval.decided`; the function picks up at the durable `step.waitForEvent` boundary; the run completes.
 
    **Caveats**
-   - In Turbopack dev, hot-reload during an active SDK call still resets the in-process conversation — Inngest replays the function from the top. The gate row is preserved; the approval still completes; the orchestrator just rebuilds the conversation. Phase 12's sandbox process makes this seamless.
+   - Every `step.waitForEvent` is a function-exit boundary, so Inngest re-invokes the function from the top after Approve / Modify / Deny. `runOrchestrator` is not wrapped in `step.run`, which means the SDK conversation is rebuilt from the original prompt on every replay. Gate ids are derived deterministically from `sha1(taskId-gate-${count})` so each replay opens *the same* `approval_gates` row and Inngest memoizes the wait — the run completes after a single click. Side effect: each replay still emits a duplicate `approval_request:opened` row in the timeline; functional behavior is unaffected. Phase 12's sandbox process eliminates the replay rebuild entirely.
+   - Turbopack hot-reload during a live wait works the same way — the killed process is just another reason for the function to exit.
    - The Server Action has no auth in phase 07; treat the dev server as local-only. Phase 11's Better Auth gates it.
 
 ## Scripts
