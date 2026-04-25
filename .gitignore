@@ -47,6 +47,7 @@ Thumbs.db
 # TypeScript
 *.tsbuildinfo
 next-env.d.ts
+.playwright-mcp
 
 # Debug logs
 npm-debug.log*
