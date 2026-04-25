@@ -1,5 +1,5 @@
-import { runOrchestrator } from '@/lib/agent/runtime';
-import { finalizeTask } from '@/db/queries/task-runtime';
+import { inngest } from '@/lib/inngest/client';
+import { TASK_STARTED, taskStartedSchema } from '@/lib/inngest/events';
 
 export type StartTaskArgs = {
   taskId: string;
@@ -9,44 +9,27 @@ export type StartTaskArgs = {
 };
 
 /**
- * Kick off the orchestrator for an existing queued task. Fire-and-forget:
- * the caller (POST /api/tasks) returns immediately. The underlying promise
- * runs to completion in the same Node process.
+ * Phase-07: dispatch the orchestrator via an Inngest event. The event broker
+ * keeps the work durable across server restarts — Turbopack hot-reload, pod
+ * recycle, deploy — so the runner that the phase-06 fire-and-forget Promise
+ * could lose to a process kill is now resumable from Inngest's store.
  *
- * On rejection we best-effort finalize the task to `failed` so the UI's SSE
- * stream gets a terminal signal instead of polling forever.
+ * Returns once the event is accepted by Inngest. The actual orchestrator
+ * execution happens inside the registered `taskStartedFn` which is hosted
+ * by `app/api/inngest/route.ts`.
  *
- * PHASE-06 LIMITATION: in Turbopack dev, hot-reload during an in-flight run
- * will kill the process — the task row will be left `in_progress` with no
- * terminal event. Phase 07's Inngest integration fixes this by moving the
- * run into a durable workflow.
+ * The caller (`POST /api/tasks`) wraps this in try/catch + finalizeTask so
+ * a broker outage still terminates the SSE stream cleanly.
  */
-export function startTask(args: StartTaskArgs): void {
-  void Promise.resolve()
-    .then(() =>
-      runOrchestrator({
-        taskId: args.taskId,
-        prompt: args.prompt,
-        maxBudgetUsd: args.maxBudgetUsd,
-        maxTurns: args.maxTurns,
-        createdBy: 'http',
-      }),
-    )
-    .catch(async (err) => {
-      const message = err instanceof Error ? err.message : String(err);
-      console.error(
-        `[start-task] taskId=${args.taskId} runner rejected: ${message}`,
-      );
-      try {
-        await finalizeTask({ taskId: args.taskId, status: 'failed' });
-      } catch (finalizeErr) {
-        const fmsg =
-          finalizeErr instanceof Error
-            ? finalizeErr.message
-            : String(finalizeErr);
-        console.error(
-          `[start-task] taskId=${args.taskId} finalize-to-failed also failed: ${fmsg}`,
-        );
-      }
-    });
+export async function startTask(args: StartTaskArgs): Promise<void> {
+  const data = taskStartedSchema.parse({
+    taskId: args.taskId,
+    prompt: args.prompt,
+    ...(args.maxBudgetUsd !== undefined
+      ? { maxBudgetUsd: args.maxBudgetUsd }
+      : {}),
+    ...(args.maxTurns !== undefined ? { maxTurns: args.maxTurns } : {}),
+  });
+
+  await inngest.send({ name: TASK_STARTED, data });
 }

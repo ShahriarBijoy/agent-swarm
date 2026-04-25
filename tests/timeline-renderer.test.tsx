@@ -136,6 +136,77 @@ describe('phase-06 TimelineEventRenderer', () => {
     expect(html).toContain('aborted');
   });
 
+  it('renders approval_request:opened with awaiting badge + tool name + reason', () => {
+    const html = renderToString(
+      <TimelineEventRenderer
+        event={ev('approval_request', {
+          subtype: 'opened',
+          gate_id: 'gate-aaaa-1111',
+          tool_name: 'Bash',
+          proposed_input: { command: 'rm -rf /tmp/x' },
+          reason: 'Non-whitelisted Bash: rm -rf /tmp/x',
+        })}
+      />,
+    );
+    expect(html).toContain('awaiting approval');
+    expect(html).toContain('Bash');
+    expect(html).toContain('Non-whitelisted Bash');
+    expect(html).toContain('gate-aaaa-1111');
+  });
+
+  it('renders approval_request:resolved (approved) with the decision badge', () => {
+    const html = renderToString(
+      <TimelineEventRenderer
+        event={ev('approval_request', {
+          subtype: 'resolved',
+          gate_id: 'gate-aaaa-1111',
+          decision: 'approved',
+        })}
+      />,
+    );
+    expect(html).toContain('approved');
+    expect(html).toContain('gate-aaaa-1111');
+  });
+
+  it('renders approval_request:resolved (denied) with the reviewer reason', () => {
+    const html = renderToString(
+      <TimelineEventRenderer
+        event={ev('approval_request', {
+          subtype: 'resolved',
+          gate_id: 'gate-aaaa-1111',
+          decision: 'denied',
+          reason: 'too risky',
+        })}
+      />,
+    );
+    expect(html).toContain('denied');
+    expect(html).toContain('too risky');
+  });
+
+  it('renders approval_request:resolved (modified) with modified_input details', () => {
+    const html = renderToString(
+      <TimelineEventRenderer
+        event={ev('approval_request', {
+          subtype: 'resolved',
+          gate_id: 'gate-aaaa-1111',
+          decision: 'modified',
+          modified_input: { command: 'rm -rf /tmp/safe_only' },
+        })}
+      />,
+    );
+    expect(html).toContain('modified');
+    expect(html).toContain('safe_only');
+  });
+
+  it('returns null when an approval_request payload lacks a known subtype', () => {
+    const html = renderToString(
+      <TimelineEventRenderer
+        event={ev('approval_request', { gate_id: 'x' })}
+      />,
+    );
+    expect(html).toBe('');
+  });
+
   it('returns null for an unknown event type (forward-compat)', () => {
     const html = renderToString(
       <TimelineEventRenderer

@@ -64,6 +64,18 @@ Two workable paths, either is fine for this project:
 
 An `ANTHROPIC_API_KEY` from `console.anthropic.com` remains the fallback if Auto-ride ever turns commercial, but **is not required to build or demo this project**. Phase 05 picks whichever path you prefer at the time.
 
+## SDK gating contract (clarified during phase 07 testing)
+
+Phase 07's HITL gate exposed three `@anthropic-ai/claude-agent-sdk` contracts that the original design spec got wrong. Future phases (**08** swarm, **09** cleanup debate, **12** sandbox) **must** honor these or the gate silently breaks:
+
+1. **`allowedTools` is auto-allow, not "available tools".** The SDK's own JSDoc: *"List of tool names that are auto-allowed without prompting for permission."* Tools listed here **bypass `canUseTool` entirely**. Phase 07's design spec briefly added `Bash` + `Write` to `allowedTools` expecting the gate to still fire — it did not. Rule: a tool that should be gated must **not** appear in `allowedTools`. It remains callable via the SDK default toolset (or an explicit `tools: [...]`).
+2. **`PreToolUse` hooks short-circuit `canUseTool`.** A hook that returns `{ hookSpecificOutput: { permissionDecision: 'allow' } }` is treated as a final permission decision — `canUseTool` never fires. Phase 07's `auditPreToolUse` hook did exactly this and silently disabled the gate. Rule: observability-only hooks must return `{}` (or omit `permissionDecision`). Use `'ask'` if you want the hook to defer to the prompt tool.
+3. **`PermissionResult` requires `updatedInput` even on plain `allow`.** The TypeScript type marks `updatedInput?` optional, but the SDK runtime Zod-validates it as required for `behavior: 'allow'` and rejects with a `tool_result` error otherwise. Rule: when allowing without modification, echo the original input back as `updatedInput`.
+
+Plus one Inngest replay constraint that phase 07 mitigated and phase 12 will eliminate:
+
+4. **Inngest function replay re-runs the SDK call.** Each `step.waitForEvent` boundary is a function-exit boundary. On the next event the function is re-invoked from the top, and `runOrchestrator` is **not** wrapped in `step.run`, so the SDK conversation is rebuilt from the prompt. Phase 07 derives gate ids from `sha1(taskId-gate-${count})` formatted as a v4 UUID, so every replay opens *the same* `approval_gates` row and the same `step.waitForEvent` step id — Inngest then memoizes the wait result and the run completes after one Approve click. Until phase 12's sandbox process holds the SDK conversation across replays, downstream callers must not assume a single SDK process per task.
+
 ## Per-phase checklist (copy into each phase PR body)
 
 - [ ] Worktree created at `.worktree/phase-<NN>-<kebab>/` with branch `phase/<NN>-<kebab>`

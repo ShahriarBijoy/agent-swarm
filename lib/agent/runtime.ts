@@ -1,8 +1,8 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
-import type { SDKMessage } from '@anthropic-ai/claude-agent-sdk';
+import type { CanUseTool, SDKMessage } from '@anthropic-ai/claude-agent-sdk';
 import { loadAgentAuthEnv, type AgentAuthEnv } from '@/lib/env';
 import {
-  appendTaskEvent,
+  appendTaskEventAuto,
   createTask,
   createTaskRun,
   finalizeRun,
@@ -18,6 +18,7 @@ import {
   mapMessageToEvents,
   type TaskEventInput,
 } from '@/lib/agent/persist';
+import { userPromptStream } from '@/lib/agent/approvals';
 
 export type RunOrchestratorArgs = {
   prompt: string;
@@ -37,6 +38,12 @@ export type RunOrchestratorArgs = {
   onEvent?: (event: PersistedEvent) => void;
   /** Fires once when the SDKSystemMessage init arrives. */
   onSessionStart?: (sessionId: string) => void;
+  /**
+   * Phase-07 HITL. Factory takes the freshly-minted runId so the canUseTool
+   * callback can persist gates keyed to it. Undefined = allow-all (phase-05
+   * CLI path), so the existing `pnpm query:demo` script keeps working.
+   */
+  canUseToolFactory?: (runId: string) => CanUseTool;
 };
 
 export type PersistedEvent = TaskEventInput & { seq: number };
@@ -56,16 +63,25 @@ export type RunOrchestratorResult = {
 export async function runOrchestrator(
   args: RunOrchestratorArgs,
 ): Promise<RunOrchestratorResult> {
-  // Validate taskId first (cheap DB read) before touching auth, so a bad
-  // taskId throws the actionable "not found" / "terminal state" error
-  // regardless of whether Anthropic creds are configured.
+  // Validate taskId first (cheap DB read) before touching auth.
   let taskId: string;
   if (args.taskId) {
     const existing = await getTaskById(args.taskId);
     if (!existing) {
       throw new Error(`runOrchestrator: task ${args.taskId} not found`);
     }
-    if (existing.status !== 'queued' && existing.status !== 'in_progress') {
+    // Phase 07 admits `awaiting_approval` for the Inngest-replay path: if the
+    // worker dies between step boundaries, Inngest re-invokes the function;
+    // the function re-enters runOrchestrator on a task whose canUseTool
+    // callback put it into awaiting_approval. We pull it back to in_progress
+    // and let the SDK rebuild the conversation. Phase 12's sandbox process
+    // is what makes this seamless; for now it's documented in the design
+    // spec as a dev-only wrinkle.
+    const isResumable =
+      existing.status === 'queued' ||
+      existing.status === 'in_progress' ||
+      existing.status === 'awaiting_approval';
+    if (!isResumable) {
       throw new Error(
         `runOrchestrator: task ${args.taskId} is ${existing.status}, cannot run`,
       );
@@ -93,10 +109,12 @@ export async function runOrchestrator(
       ? { maxThinkingTokens: args.maxThinkingTokens }
       : {}),
     ...(args.cwd !== undefined ? { cwd: args.cwd } : {}),
+    ...(args.canUseToolFactory
+      ? { canUseTool: args.canUseToolFactory(runId) }
+      : {}),
   };
   const options = buildOrchestratorOptions(overrides);
 
-  let seq = 0;
   let sessionId: string | null = null;
   let sawResult = false;
   let resultSuccess = false;
@@ -108,7 +126,13 @@ export async function runOrchestrator(
   let errorText: string | null = null;
 
   try {
-    for await (const msg of query({ prompt: args.prompt, options })) {
+    // Phase 07: streaming-input mode. The SDK requires an AsyncIterable<
+    // SDKUserMessage> as `prompt` whenever `canUseTool` is set; we pass the
+    // single-message generator unconditionally so the contract is uniform.
+    for await (const msg of query({
+      prompt: userPromptStream(args.prompt),
+      options,
+    })) {
       if (isInitMessage(msg)) {
         sessionId = msg.session_id;
         await updateTaskRunSession({ runId, sessionId });
@@ -132,10 +156,17 @@ export async function runOrchestrator(
 
       const events = mapMessageToEvents(msg);
       for (const ev of events) {
-        await appendTaskEvent({ runId, taskId, seq, type: ev.type, payload: ev.payload });
-        const persisted: PersistedEvent = { ...ev, seq };
+        // Phase 07: appendTaskEventAuto computes seq atomically so the
+        // canUseTool callback (separate writer) and the Server Action that
+        // resolves a gate (third writer) never collide on (run_id, seq).
+        const written = await appendTaskEventAuto({
+          runId,
+          taskId,
+          type: ev.type,
+          payload: ev.payload,
+        });
+        const persisted: PersistedEvent = { ...ev, seq: written.seq };
         safeCallback(() => args.onEvent?.(persisted));
-        seq += 1;
       }
     }
 

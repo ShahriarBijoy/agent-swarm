@@ -12,6 +12,11 @@ export default defineConfig({
     // queries. Disable file-level parallelism; tests within a file still run
     // sequentially inside their own describe block.
     fileParallelism: false,
+    // Neon HTTP cold-start + cleanup-by-metadata-jsonb sometimes pushes
+    // single tests past the default 5s. 15s gives headroom without
+    // hiding actual hangs.
+    testTimeout: 15_000,
+    hookTimeout: 15_000,
   },
   resolve: {
     alias: { '@': path.resolve(__dirname, '.') },
