@@ -26,18 +26,13 @@ describe('auditPreToolUse', () => {
     errSpy.mockRestore();
   });
 
-  it('returns a pass-through PreToolUseHookSpecificOutput with permissionDecision=allow', async () => {
+  it('returns an empty object so the SDK falls through to canUseTool (no permissionDecision)', async () => {
     const out = await auditPreToolUse(
       preToolUse(),
       'toolu_1',
       { signal: new AbortController().signal } as unknown as Parameters<typeof auditPreToolUse>[2],
     );
-    expect(out).toEqual({
-      hookSpecificOutput: {
-        hookEventName: 'PreToolUse',
-        permissionDecision: 'allow',
-      },
-    });
+    expect(out).toEqual({});
   });
 
   it('logs the tool name to stderr', async () => {

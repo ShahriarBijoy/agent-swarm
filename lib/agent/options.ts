@@ -18,14 +18,14 @@ export const DEFAULT_MAX_BUDGET_USD = 0.5;
 export const DEFAULT_MAX_TURNS = 20;
 export const DEFAULT_MAX_THINKING_TOKENS = 8192;
 
+// `allowedTools` is the SDK's auto-allow fast-path: tools listed here skip
+// the canUseTool callback entirely (per @anthropic-ai/claude-agent-sdk
+// JSDoc: "auto-allowed without prompting for permission"). Bash and Write
+// are deliberately omitted so phase-07's canUseTool gate fires for them.
+// They remain available to the model via the SDK default toolset.
 export const ORCHESTRATOR_ALLOWED_TOOLS: readonly string[] = [
   'Agent',
   'Read',
-  // Phase 07 admits Bash + Write because the canUseTool gate now controls
-  // them (write to source / non-whitelisted Bash → human approval). Without
-  // them in allowedTools the SDK refuses outright before canUseTool fires.
-  'Bash',
-  'Write',
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,

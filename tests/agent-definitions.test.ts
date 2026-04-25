@@ -60,19 +60,19 @@ describe('buildOrchestratorOptions', () => {
     expect(ORCHESTRATOR_MODEL).toBe('claude-sonnet-4-6');
   });
 
-  it('includes Agent + Read + Bash + Write + all four memory FQNs in allowedTools', () => {
+  it('includes Agent + Read + all four memory FQNs in allowedTools, omits Bash + Write so canUseTool gates them', () => {
     const opts = buildOrchestratorOptions();
     expect(opts.allowedTools).toEqual([
       'Agent',
       'Read',
-      'Bash',
-      'Write',
       RECALL_TOOL_FQN,
       WRITE_TOOL_FQN,
       REINFORCE_TOOL_FQN,
       FORGET_TOOL_FQN,
     ]);
     expect([...ORCHESTRATOR_ALLOWED_TOOLS]).toEqual(opts.allowedTools);
+    expect(opts.allowedTools).not.toContain('Bash');
+    expect(opts.allowedTools).not.toContain('Write');
   });
 
   it('omits canUseTool by default and threads it when supplied', () => {

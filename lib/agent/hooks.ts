@@ -1,21 +1,23 @@
 import type {
   HookCallback,
   PreToolUseHookInput,
-  PreToolUseHookSpecificOutput,
 } from '@anthropic-ai/claude-agent-sdk';
 
 const INPUT_PREVIEW_LIMIT = 200;
 
 /**
  * PreToolUse audit hook. Logs every tool invocation (orchestrator + subagents)
- * to stderr and returns a `permissionDecision: 'allow'` pass-through.
+ * to stderr without making a permission decision — `permissionDecision` is
+ * deliberately omitted so the SDK falls through to phase-07's canUseTool gate.
  *
- * Policy gating (deny / ask for destructive MCP tools) is phase 07's
- * `canUseTool` gate; this hook is pure observability.
+ * Returning `permissionDecision: 'allow'` here would short-circuit the gate:
+ * the SDK treats hook-level allow as final and never consults the
+ * permission-prompt-tool. Policy gating lives in `lib/agent/approval-policy.ts`,
+ * surfaced via canUseTool.
  */
 export const auditPreToolUse: HookCallback = async (input, toolUseId) => {
   if (!isPreToolUseInput(input)) {
-    return { hookSpecificOutput: passThroughOutput() };
+    return {};
   }
 
   const isSubagent = Boolean(input.agent_id);
@@ -28,7 +30,7 @@ export const auditPreToolUse: HookCallback = async (input, toolUseId) => {
       `session=${input.session_id} input=${safeShort(input.tool_input)}`,
   );
 
-  return { hookSpecificOutput: passThroughOutput() };
+  return {};
 };
 
 /**
@@ -45,13 +47,6 @@ export function safeShort(value: unknown, limit = INPUT_PREVIEW_LIMIT): string {
   }
   if (s.length <= limit) return s;
   return s.slice(0, limit) + `…(+${s.length - limit})`;
-}
-
-function passThroughOutput(): PreToolUseHookSpecificOutput {
-  return {
-    hookEventName: 'PreToolUse',
-    permissionDecision: 'allow',
-  };
 }
 
 function isPreToolUseInput(input: unknown): input is PreToolUseHookInput {
