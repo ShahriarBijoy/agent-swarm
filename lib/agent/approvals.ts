@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import type { CanUseTool, PermissionResult } from '@anthropic-ai/claude-agent-sdk';
 import {
   expireGate as defaultExpireGate,
@@ -7,6 +8,28 @@ import {
 } from '@/db/queries/approval-gates';
 import { appendTaskEventAuto as defaultAppendTaskEventAuto } from '@/db/queries/task-runtime';
 import { shouldRequireApproval } from '@/lib/agent/approval-policy';
+
+/**
+ * Format a SHA-1 digest of `${taskId}-gate-${count}` as an RFC-4122-shaped
+ * UUID v4 string (8-4-4-4-12, with the version + variant bits forced so it
+ * passes `z.string().uuid()` validation in the Server Action). Stable per
+ * (taskId, count) → replays of the Inngest function produce the same gate
+ * row id and the same step.waitForEvent step id, so Inngest can memoize the
+ * wait result instead of opening a fresh gate every replay.
+ */
+export function deterministicGateId(taskId: string, count: number): string {
+  const hex = createHash('sha1').update(`${taskId}-gate-${count}`).digest('hex');
+  // Force RFC-4122 v4 layout:
+  //   - 13th hex digit = '4'   (version)
+  //   - 17th hex digit ∈ {8,9,a,b}   (variant)
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    '4' + hex.slice(13, 16),
+    '8' + hex.slice(17, 20),
+    hex.slice(20, 32),
+  ].join('-');
+}
 
 /**
  * Subset of Inngest's `step` API consumed by the canUseTool callback.
@@ -74,6 +97,20 @@ export type CanUseToolContext = {
  *      return deny with a clear message so the orchestrator can react.
  */
 export function createCanUseTool(ctx: CanUseToolContext): CanUseTool {
+  // Per-task gate sequence — closure-stored so each canUseTool fire within
+  // one Inngest function invocation gets a unique number, while the SAME
+  // sequence number is produced on replay (closure is recreated identically
+  // because taskStartedFn re-runs from the top with the same taskId, and the
+  // SDK regenerates the same conversation → same canUseTool fire order).
+  // Combined with deterministicGateId(), this means a replay of the function
+  // hits the same `approval_gates.id` and the same `step.waitForEvent` step
+  // ID, so Inngest can memoize the wait result and resume past it instead
+  // of opening a fresh gate every time.
+  let gateCount = 0;
+  const defaultGenerateGateId = (): string => {
+    gateCount += 1;
+    return deterministicGateId(ctx.taskId, gateCount);
+  };
   const deps: Required<CanUseToolDeps> = {
     openGate: ctx.deps?.openGate ?? defaultOpenGate,
     expireGate: ctx.deps?.expireGate ?? defaultExpireGate,
@@ -82,13 +119,22 @@ export function createCanUseTool(ctx: CanUseToolContext): CanUseTool {
     markTaskResumed: ctx.deps?.markTaskResumed ?? defaultMarkTaskResumed,
     appendTaskEventAuto:
       ctx.deps?.appendTaskEventAuto ?? defaultAppendTaskEventAuto,
-    generateGateId: ctx.deps?.generateGateId ?? (() => crypto.randomUUID()),
+    generateGateId: ctx.deps?.generateGateId ?? defaultGenerateGateId,
   };
 
   return async (toolName, input, { signal }) => {
+    // SDK runtime Zod-validates the PermissionResult and (despite its TS
+    // type marking `updatedInput?: ...`) requires the field to be present
+    // on every `behavior: 'allow'` return. Echo the original input back when
+    // we don't actually modify it so the SDK accepts the result.
+    const inputAsRecord = input as Record<string, unknown>;
+    const allowPassThrough: PermissionResult = {
+      behavior: 'allow',
+      updatedInput: inputAsRecord,
+    };
     const hint = shouldRequireApproval(toolName, input);
     if (!hint.require) {
-      return { behavior: 'allow' } satisfies PermissionResult;
+      return allowPassThrough;
     }
 
     if (signal.aborted) {
@@ -165,7 +211,7 @@ export function createCanUseTool(ctx: CanUseToolContext): CanUseTool {
       } satisfies PermissionResult;
     }
 
-    return { behavior: 'allow' } satisfies PermissionResult;
+    return allowPassThrough;
   };
 }
 

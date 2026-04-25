@@ -78,7 +78,7 @@ describe('phase-07 createCanUseTool', () => {
       { signal: noAbort, toolUseID: 'tu1' },
     );
 
-    expect(result).toEqual({ behavior: 'allow' });
+    expect(result).toEqual({ behavior: 'allow', updatedInput: { query: 'fleet' } });
     expect(deps.openGate).not.toHaveBeenCalled();
     expect(deps.appendTaskEventAuto).not.toHaveBeenCalled();
     expect(deps.markTaskAwaitingApproval).not.toHaveBeenCalled();
@@ -104,7 +104,10 @@ describe('phase-07 createCanUseTool', () => {
       { signal: noAbort, toolUseID: 'tu1' },
     );
 
-    expect(result).toEqual({ behavior: 'allow' });
+    expect(result).toEqual({
+      behavior: 'allow',
+      updatedInput: { command: 'rm -rf /tmp/x' },
+    });
     expect(deps.openGate).toHaveBeenCalledOnce();
     expect(deps.openGate).toHaveBeenCalledWith({
       id: 'gate-aaaa-1111',
