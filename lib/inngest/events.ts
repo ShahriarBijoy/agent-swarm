@@ -28,3 +28,12 @@ export const approvalDecidedSchema = z.object({
 
 export type TaskStartedData = z.infer<typeof taskStartedSchema>;
 export type ApprovalDecidedData = z.infer<typeof approvalDecidedSchema>;
+
+export const CLEANUP_REQUESTED = 'auto-ride/cleanup.requested' as const;
+
+export const cleanupRequestedSchema = z.object({
+  /** Optional human-readable reason for audit; default "manual". */
+  reason: z.string().default('manual'),
+});
+
+export type CleanupRequestedData = z.infer<typeof cleanupRequestedSchema>;
