@@ -191,6 +191,43 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
     - The dispatcher does NOT have `Bash` or `Write` in its allowedTools — if a workflow needs those, the dispatcher must dispatch to `incident-responder` (Bash + Write) or one of the other Write-capable workers. This makes the dispatcher physically incapable of "doing it itself" for many workflows.
     - Per-agent dollar enforcement is observability-only in phase 08. Each `Agent` tool_call event carries `payload.soft_budget_usd` for the spawned worker; phase 10's per-agent dashboard surfaces actual-vs-budget; phase 12's cost aggregator turns the soft cap into a hard one.
 
+11. **Phase 09 — nightly cleanup debate.** A three-agent debate (Consolidator Sonnet 4.6 → Adversary Haiku 4.5 → Judge Opus 4.6 only on contested confidence > 0.7) governs **prune** and **merge** actions over the memory store. Promotions remain on phase 04's deterministic streak path. The whole pipeline runs inside one Inngest function with two triggers: a daily `0 3 * * *` UTC cron (dormant pre-deploy) and `auto-ride/cleanup.requested` for manual/CLI demos.
+
+    Three terminals — same shape as phase 07/08:
+
+    ```bash
+    # Terminal 1 — Next.js (port 3100; never use 3000)
+    pnpm dev -p 3100
+
+    # Terminal 2 — Inngest broker
+    pnpm inngest:dev
+
+    # Terminal 3 — trigger one cleanup run
+    pnpm cleanup:run-once
+    ```
+
+    Watch the Inngest dev UI at [http://localhost:8288](http://localhost:8288) for the live function trace (8 step boundaries: stale-finalizer, open-run, select-candidates, debate, persist-proposals, apply-verdicts, expire-tombstones, close-run). Inspect results in Postgres:
+
+    ```sql
+    SELECT id, status, candidates_considered, proposals_generated,
+           proposals_contested, proposals_judged, cost_usd, error
+    FROM memory_cleanup_runs ORDER BY started_at DESC LIMIT 5;
+
+    SELECT memory_id, action, final_action, applied_at,
+           consolidator->>'reasoning' AS consolidator_reason,
+           adversary->>'adversaryConfidence' AS adv_conf,
+           judge IS NOT NULL AS judge_fired
+    FROM memory_cleanup_proposals ORDER BY created_at DESC LIMIT 20;
+    ```
+
+    **Kill switch.** `MEMORY_CLEANUP_CRON_ENABLED=false` in `.env.local` → restart Next.js → the cron handler returns `{ skipped: true, reason: 'env-flag' }` immediately. Manual `pnpm cleanup:run-once` ignores the flag (useful for ad-hoc demos with the cron disabled).
+
+    **Caveats**
+    - Asymmetric loss: errors of omission are cheaper than errors of commission. Adversary parse-failure ⇒ no objection ⇒ Consolidator wins. Judge parse-failure ⇒ `keep` (no-op).
+    - Cost cap: `MAX_RUN_USD = 10.0` is checked between every model call; on breach, run row is marked `failed` with the cap message and `CostCapExceededError` is rethrown for Inngest visibility.
+    - Idempotency: cron skips silently if a `completed` run exists for today; manual events always proceed.
+    - Cost figures are notional under Max OAuth (same caveat as phase 08).
+
 ## Scripts
 
 | Script | Purpose |
@@ -207,6 +244,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm recall:demo` | Seed memories, embed a query via Gemini, print ranked recall (phase 03) |
 | `pnpm memory:demo` | End-to-end memory lifecycle dry-run: write six memories, recall with auto-reinforce, explicit reinforce, forget, evaluate promotion proposal, evaluate tombstone-expiry candidate, clean up (phase 04) |
 | `pnpm query:demo` | First real `query()`: orchestrator + fleet-analyst subagent + memory MCP + task_events persistence, CLI-driven. Accepts a prompt as argv. Requires Anthropic auth (see quickstart step 7). (phase 05) |
+| `pnpm cleanup:run-once` | Sends `auto-ride/cleanup.requested`; Inngest dev server invokes `memoryCleanupFn` once. Watch the run in the Inngest UI at [http://localhost:8288](http://localhost:8288). (phase 09) |
 
 ## Phase status
 
