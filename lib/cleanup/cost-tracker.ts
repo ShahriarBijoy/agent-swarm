@@ -43,8 +43,8 @@ export const MAX_RUN_USD = 10.0;
 export interface AnthropicUsage {
   input_tokens: number;
   output_tokens: number;
-  cache_read_input_tokens: number;
-  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number | null;
+  cache_creation_input_tokens: number | null;
 }
 
 /**
@@ -59,7 +59,7 @@ export function computeCallCostUsd(
   const rates = PRICING[model];
   const input = (usage.input_tokens / 1_000_000) * rates.input;
   const output = (usage.output_tokens / 1_000_000) * rates.output;
-  const cacheR = (usage.cache_read_input_tokens / 1_000_000) * rates.cacheRead;
-  const cacheW = (usage.cache_creation_input_tokens / 1_000_000) * rates.cacheWrite;
+  const cacheR = ((usage.cache_read_input_tokens ?? 0) / 1_000_000) * rates.cacheRead;
+  const cacheW = ((usage.cache_creation_input_tokens ?? 0) / 1_000_000) * rates.cacheWrite;
   return input + output + cacheR + cacheW;
 }
