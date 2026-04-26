@@ -22,6 +22,7 @@ skipSuite('phase-09 cleanup apply', () => {
   let runId = '';
   let proposalPruneId = '';
   let proposalMergeId = '';
+  let proposalKeepId = '';
 
   beforeAll(async () => {
     await rawSql`DELETE FROM memory_links WHERE proposal_id IN (
@@ -74,11 +75,18 @@ skipSuite('phase-09 cleanup apply', () => {
               'merge', 'merge', ${rawSql.json({ reasoning: 'test', confidence: 0.9 })})
       RETURNING id`;
     proposalMergeId = pm!.id;
+    const [pk] = await rawSql<{ id: string }[]>`
+      INSERT INTO memory_cleanup_proposals
+        (run_id, memory_id, action, final_action, consolidator)
+      VALUES (${runId}::uuid, ${mergeAId}::uuid, 'keep', 'keep',
+              ${rawSql.json({ reasoning: 'test', confidence: 0.9 })})
+      RETURNING id`;
+    proposalKeepId = pk!.id;
   });
 
   afterAll(async () => {
-    await rawSql`DELETE FROM memory_links WHERE proposal_id IN (${proposalPruneId}, ${proposalMergeId})`;
-    await rawSql`DELETE FROM memory_cleanup_proposals WHERE id IN (${proposalPruneId}, ${proposalMergeId})`;
+    await rawSql`DELETE FROM memory_links WHERE proposal_id IN (${proposalPruneId}, ${proposalMergeId}, ${proposalKeepId})`;
+    await rawSql`DELETE FROM memory_cleanup_proposals WHERE id IN (${proposalPruneId}, ${proposalMergeId}, ${proposalKeepId})`;
     await rawSql`DELETE FROM memory_cleanup_runs WHERE id = ${runId}`;
     await rawSql`DELETE FROM memories WHERE metadata->>'test_id' = ${TEST_ID}`;
     await rawSql.end();
@@ -139,7 +147,7 @@ skipSuite('phase-09 cleanup apply', () => {
   it('keep verdict is a no-op (no tombstone, applied count 0)', async () => {
     const verdicts: Verdict[] = [
       {
-        proposalId: '00000000-0000-0000-0000-000000000099',
+        proposalId: proposalKeepId,
         memoryId: mergeAId,
         targetMemoryId: null,
         finalAction: 'keep',
@@ -151,5 +159,8 @@ skipSuite('phase-09 cleanup apply', () => {
       { tombstoned_at: Date | null }[]
     >`SELECT tombstoned_at FROM memories WHERE id = ${mergeAId}`;
     expect(row!.tombstoned_at).toBeNull();
+    const [proposal] = await rawSql<{ applied_at: Date | null }[]>
+      `SELECT applied_at FROM memory_cleanup_proposals WHERE id = ${proposalKeepId}`;
+    expect(proposal!.applied_at).not.toBeNull();
   });
 });

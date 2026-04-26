@@ -87,11 +87,14 @@ export async function applyVerdicts(verdicts: Verdict[]): Promise<ApplyResult> {
     const survivor = aImp >= bImp ? a : b; // tie → a (memoryId)
     const loser = survivor === a ? b : a;
 
+    // idempotent on Inngest replay — uniq index is (parent, child, linkType)
     await db.insert(memoryLinks).values({
       parentId: survivor.id,
       childId: loser.id,
       linkType: 'merged',
       proposalId: v.proposalId,
+    }).onConflictDoNothing({
+      target: [memoryLinks.parentId, memoryLinks.childId, memoryLinks.linkType],
     });
 
     await db
