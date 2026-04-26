@@ -51,6 +51,9 @@ export async function selectCleanupCandidates(
         m.bucket::text  AS bucket,
         m.content,
         m.importance::text AS importance,
+        -- bucket <> 'permanent' is enforced in the WHERE below; the
+        -- 'permanent' CASE arm is kept for parity with decay-sql.ts so a
+        -- side-by-side diff stays trivial.
         (m.importance::float8 * exp(
           -(CASE m.bucket
               WHEN 'permanent' THEN 0
@@ -71,6 +74,11 @@ export async function selectCleanupCandidates(
       ORDER BY eff_imp ASC
       LIMIT ${pruneLimit}
     ),
+    -- merge_picks self-join is O(n²) before the cosine filter prunes;
+    -- acceptable at dev/demo volumes (hundreds per segment). Before scaling
+    -- past a few thousand rows per segment, add:
+    --   CREATE INDEX ON memories (segment, id)
+    --     WHERE tombstoned_at IS NULL AND embedding IS NOT NULL;
     merge_picks AS (
       SELECT
         'merge'::text AS candidate_kind,

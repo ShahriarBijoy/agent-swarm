@@ -81,8 +81,9 @@ skipSuite('phase-09 cleanup candidate selection', () => {
         (c.content === 'merge pair A' || c.content === 'merge pair B'),
     );
     expect(merges).toHaveLength(1);
-    // The asymmetric `b.id > a.id` ordering means content of memoryId is older row.
-    // We can't predict UUID order, but we can assert the pair is collapsed:
+    // UUID v4 ordering is random, so we can't predict which row gets the
+    // memoryId vs targetMemoryId — the `b.id > a.id` join condition only
+    // guarantees the pair is collapsed exactly once. Assert that here:
     expect(merges[0]!.targetMemoryId).not.toBeNull();
   });
 
