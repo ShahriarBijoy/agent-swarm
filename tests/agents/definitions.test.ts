@@ -53,6 +53,11 @@ describe('per-agent definitions', () => {
       expect(agent.model).not.toMatch(/^claude-/);
     });
 
+    it('declares an explicit tools array (registry-wide contract — never inherit from parent)', () => {
+      expect(agent.tools).toBeDefined();
+      expect(Array.isArray(agent.tools)).toBe(true);
+    });
+
     it('exposes exactly the declared tool surface', () => {
       expect(agent.tools).toEqual([...expectedTools]);
     });
