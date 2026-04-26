@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  isGatedOutputPath,
   isSourcePath,
   isWhitelistedBash,
   shouldRequireApproval,
@@ -79,6 +80,60 @@ describe('phase-07 approval-policy', () => {
     it('gates Write without file_path', () => {
       const r = shouldRequireApproval('Write', {});
       expect(r.require).toBe(true);
+    });
+  });
+
+  describe('shouldRequireApproval — Write to phase-08 gated output paths', () => {
+    it.each([
+      ['dispatch-log/v-09.md'],
+      ['./dispatch-log/incident-2026-04-27.md'],
+      ['some/nested/dispatch-log/foo.txt'],
+      ['invoices/T-998.json'],
+      ['./invoices/refund-T-100.json'],
+      ['replies/ticket-42.md'],
+      ['nested/dir/replies/r-1.md'],
+      ['dispatch-log\\windows\\v-09.md'], // backslash separator
+    ])('gates write to gated output: %s', (file_path) => {
+      const r = shouldRequireApproval('Write', { file_path });
+      expect(r.require).toBe(true);
+      if (r.require) {
+        expect(r.reason).toMatch(/gated output/i);
+        expect(r.reason).toContain(file_path);
+      }
+    });
+
+    it('source-tree gate wins on overlap (src/invoices/foo.json)', () => {
+      const r = shouldRequireApproval('Write', { file_path: 'src/invoices/foo.json' });
+      expect(r.require).toBe(true);
+      if (r.require) {
+        expect(r.reason).toMatch(/source tree/i);
+        expect(r.reason).not.toMatch(/gated output/i);
+      }
+    });
+
+    it.each([
+      ['docs/dispatch-log-design.md'],     // contains the substring but not as a path segment
+      ['my-invoices/foo.json'],            // not at a path boundary
+      ['repliesabout/x.md'],
+    ])('does not gate look-alike paths: %s', (file_path) => {
+      const r = shouldRequireApproval('Write', { file_path });
+      expect(r.require).toBe(false);
+    });
+  });
+
+  describe('isGatedOutputPath', () => {
+    it.each([
+      ['dispatch-log/foo.md', true],
+      ['./dispatch-log/foo.md', true],
+      ['nested/dispatch-log/foo.md', true],
+      ['dispatch-log\\windows.md', true],
+      ['invoices/T-1.json', true],
+      ['replies/r-1.md', true],
+      ['docs/foo.md', false],
+      ['mydispatch-log/foo.md', false], // no leading boundary
+      ['my-invoices/foo.json', false],
+    ])('isGatedOutputPath(%j) === %s', (path, expected) => {
+      expect(isGatedOutputPath(path)).toBe(expected);
     });
   });
 

@@ -1,0 +1,32 @@
+{
+  "trip_id": "T-998",
+  "completed_at": "2026-04-25T18:43:00Z",
+  "customer": {
+    "id": "C-2041",
+    "name": "Jamila Reyes",
+    "email": "jamila.reyes@example.com",
+    "preferred_payment": "card-on-file"
+  },
+  "vehicle_id": "V-12",
+  "driver_id": "D-07",
+  "pickup": {
+    "address": "401 Kemp Mill Rd, Silver Spring MD",
+    "at": "2026-04-25T18:18:00Z"
+  },
+  "dropoff": {
+    "address": "BWI Airport, Terminal A",
+    "at": "2026-04-25T18:43:00Z"
+  },
+  "distance_km": 41.2,
+  "duration_min": 25,
+  "fare_components_usd": {
+    "base": 4.50,
+    "distance": 24.72,
+    "time": 6.25,
+    "airport_surcharge": 5.00,
+    "tolls": 4.00
+  },
+  "tip_usd": 5.00,
+  "currency": "USD",
+  "notes": "Airport drop-off, no incidents."
+}
