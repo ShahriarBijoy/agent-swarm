@@ -324,3 +324,198 @@ describe('mapMessageToEvents', () => {
     expect(mapMessageToEvents(streamEvent)).toEqual([]);
   });
 });
+
+import {
+  extractAgentToolUseMapping,
+  getMessageParentToolUseId,
+  injectSoftBudget,
+  tagAgentName,
+  type TaskEventInput,
+} from '@/lib/agent/persist';
+
+describe('tagAgentName', () => {
+  const event: TaskEventInput = {
+    type: 'assistant_turn',
+    payload: { uuid: 'u-a', session_id: 's-1' },
+  };
+
+  it('tags dispatcher when parent_tool_use_id is null', () => {
+    const tagged = tagAgentName(event, null, new Map());
+    expect(tagged.payload.agent_name).toBe('dispatcher');
+  });
+
+  it('tags the worker name when parent_tool_use_id resolves in the map', () => {
+    const map = new Map([['toolu_billing_1', 'billing']]);
+    const tagged = tagAgentName(event, 'toolu_billing_1', map);
+    expect(tagged.payload.agent_name).toBe('billing');
+  });
+
+  it('tags "unknown" when parent_tool_use_id is unmapped (defensive — should not happen with flat fan-out)', () => {
+    const tagged = tagAgentName(event, 'toolu_unmapped', new Map());
+    expect(tagged.payload.agent_name).toBe('unknown');
+  });
+
+  it('preserves all existing payload fields', () => {
+    const tagged = tagAgentName(event, null, new Map());
+    expect(tagged.payload.uuid).toBe('u-a');
+    expect(tagged.payload.session_id).toBe('s-1');
+    expect(tagged.type).toBe('assistant_turn');
+  });
+
+  it('does not mutate the input event', () => {
+    const original = { ...event, payload: { ...event.payload } };
+    tagAgentName(event, null, new Map());
+    expect(event).toEqual(original);
+  });
+});
+
+describe('extractAgentToolUseMapping', () => {
+  it('returns the mapping when event is a tool_call for the Agent tool with agent_name in input', () => {
+    const event: TaskEventInput = {
+      type: 'tool_call',
+      payload: {
+        tool_use_id: 'toolu_x',
+        tool_name: 'Agent',
+        input: { agent_name: 'billing', prompt: 'invoice T-1' },
+      },
+    };
+    expect(extractAgentToolUseMapping(event)).toEqual({
+      toolUseId: 'toolu_x',
+      agentName: 'billing',
+    });
+  });
+
+  it('returns null for non-tool_call events', () => {
+    const event: TaskEventInput = {
+      type: 'assistant_turn',
+      payload: { tool_name: 'Agent', input: { agent_name: 'billing' } },
+    };
+    expect(extractAgentToolUseMapping(event)).toBeNull();
+  });
+
+  it('returns null when tool_name is not "Agent"', () => {
+    const event: TaskEventInput = {
+      type: 'tool_call',
+      payload: {
+        tool_use_id: 'toolu_x',
+        tool_name: 'Read',
+        input: { file_path: '/tmp/x' },
+      },
+    };
+    expect(extractAgentToolUseMapping(event)).toBeNull();
+  });
+
+  it('returns null when input.agent_name is missing or non-string (SDK shape drift)', () => {
+    const noAgent: TaskEventInput = {
+      type: 'tool_call',
+      payload: { tool_use_id: 'toolu_x', tool_name: 'Agent', input: { prompt: 'x' } },
+    };
+    expect(extractAgentToolUseMapping(noAgent)).toBeNull();
+
+    const numericAgent: TaskEventInput = {
+      type: 'tool_call',
+      payload: {
+        tool_use_id: 'toolu_x',
+        tool_name: 'Agent',
+        input: { agent_name: 42, prompt: 'x' },
+      },
+    };
+    expect(extractAgentToolUseMapping(numericAgent)).toBeNull();
+  });
+
+  it('returns null when tool_use_id is missing or non-string', () => {
+    const event: TaskEventInput = {
+      type: 'tool_call',
+      payload: {
+        tool_name: 'Agent',
+        input: { agent_name: 'billing' },
+      },
+    };
+    expect(extractAgentToolUseMapping(event)).toBeNull();
+  });
+});
+
+describe('injectSoftBudget', () => {
+  const budgetTable = { billing: 0.20, support: 0.25 } as const;
+
+  it('attaches soft_budget_usd to an Agent tool_call when the agent has a budget', () => {
+    const event: TaskEventInput = {
+      type: 'tool_call',
+      payload: {
+        tool_use_id: 'toolu_x',
+        tool_name: 'Agent',
+        input: { agent_name: 'billing' },
+      },
+    };
+    const out = injectSoftBudget(event, budgetTable);
+    expect(out.payload.soft_budget_usd).toBe(0.20);
+  });
+
+  it('returns the event unchanged for non-tool_call events', () => {
+    const event: TaskEventInput = {
+      type: 'assistant_turn',
+      payload: { input: { agent_name: 'billing' } },
+    };
+    const out = injectSoftBudget(event, budgetTable);
+    expect(out).toBe(event);
+  });
+
+  it('returns the event unchanged for non-Agent tool_calls', () => {
+    const event: TaskEventInput = {
+      type: 'tool_call',
+      payload: { tool_use_id: 't', tool_name: 'Read', input: { file_path: '/x' } },
+    };
+    const out = injectSoftBudget(event, budgetTable);
+    expect(out).toBe(event);
+  });
+
+  it('returns the event unchanged when the agent name is not in the budget table', () => {
+    const event: TaskEventInput = {
+      type: 'tool_call',
+      payload: { tool_use_id: 't', tool_name: 'Agent', input: { agent_name: 'unknown' } },
+    };
+    const out = injectSoftBudget(event, budgetTable);
+    expect(out).toBe(event);
+  });
+
+  it('preserves other payload fields when injecting', () => {
+    const event: TaskEventInput = {
+      type: 'tool_call',
+      payload: {
+        tool_use_id: 'toolu_x',
+        tool_name: 'Agent',
+        input: { agent_name: 'support', prompt: 'reply' },
+        parent_tool_use_id: null,
+      },
+    };
+    const out = injectSoftBudget(event, budgetTable);
+    expect(out.payload).toMatchObject({
+      tool_use_id: 'toolu_x',
+      tool_name: 'Agent',
+      parent_tool_use_id: null,
+      soft_budget_usd: 0.25,
+    });
+  });
+});
+
+describe('getMessageParentToolUseId', () => {
+  it('returns the string parent_tool_use_id when set', () => {
+    const msg = { type: 'assistant', parent_tool_use_id: 'toolu_x' } as unknown as Parameters<typeof getMessageParentToolUseId>[0];
+    expect(getMessageParentToolUseId(msg)).toBe('toolu_x');
+  });
+
+  it('returns null when parent_tool_use_id is null', () => {
+    const msg = { type: 'assistant', parent_tool_use_id: null } as unknown as Parameters<typeof getMessageParentToolUseId>[0];
+    expect(getMessageParentToolUseId(msg)).toBeNull();
+  });
+
+  it('returns null when parent_tool_use_id is missing entirely', () => {
+    const msg = { type: 'assistant' } as unknown as Parameters<typeof getMessageParentToolUseId>[0];
+    expect(getMessageParentToolUseId(msg)).toBeNull();
+  });
+
+  it('returns null for non-string parent_tool_use_id (defensive)', () => {
+    const msg = { type: 'assistant', parent_tool_use_id: 42 } as unknown as Parameters<typeof getMessageParentToolUseId>[0];
+    expect(getMessageParentToolUseId(msg)).toBeNull();
+  });
+});

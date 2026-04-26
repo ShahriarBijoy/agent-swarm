@@ -179,3 +179,89 @@ function isToolResultBlock(block: unknown): block is {
     typeof (block as { tool_use_id?: unknown }).tool_use_id === 'string'
   );
 }
+
+/**
+ * Phase-08 augmenter helper. Tags an event with `payload.agent_name` derived
+ * from the SDK's `parent_tool_use_id` chain.
+ *
+ * Rules:
+ *   - parent_tool_use_id === null → 'dispatcher' (the orchestrator's own message).
+ *   - parent_tool_use_id resolves in the map → that worker's name (set when
+ *     the dispatcher's `Agent` tool_call event was observed).
+ *   - parent_tool_use_id unmapped → 'unknown' (defensive — flat fan-out
+ *     shouldn't produce this; SDK shape drift would).
+ *
+ * Pure: no I/O, no map mutation. Caller (runtime.ts) maintains the map.
+ */
+export function tagAgentName(
+  event: TaskEventInput,
+  parentToolUseId: string | null,
+  agentByToolUseId: ReadonlyMap<string, string>,
+): TaskEventInput {
+  const agentName =
+    parentToolUseId === null
+      ? 'dispatcher'
+      : agentByToolUseId.get(parentToolUseId) ?? 'unknown';
+  return {
+    ...event,
+    payload: { ...event.payload, agent_name: agentName },
+  };
+}
+
+/**
+ * If `event` is a tool_call for the SDK's built-in `Agent` tool, returns the
+ * (toolUseId, agentName) pair the runtime should remember in its
+ * agentByToolUseId map. Returns null for any event that doesn't carry the
+ * expected shape — including non-tool_call events, non-Agent tool_calls, and
+ * tool_calls whose `input.agent_name` is missing or non-string (defensive
+ * against SDK shape drift; spec §13 risk #2).
+ */
+export function extractAgentToolUseMapping(
+  event: TaskEventInput,
+): { toolUseId: string; agentName: string } | null {
+  if (event.type !== 'tool_call') return null;
+  const payload = event.payload;
+  if (payload.tool_name !== 'Agent') return null;
+  const toolUseId = payload.tool_use_id;
+  if (typeof toolUseId !== 'string') return null;
+  const input = payload.input as { agent_name?: unknown } | undefined;
+  const agentName = input?.agent_name;
+  if (typeof agentName !== 'string') return null;
+  return { toolUseId, agentName };
+}
+
+/**
+ * Phase-08 §6.2 — soft per-agent dollar budget logging. When the runtime sees
+ * an `Agent` tool_call event, it injects `soft_budget_usd` from the registry
+ * so phase-10's per-agent dashboard can show actual-vs-budget. Observability
+ * only — no enforcement. Phase 12's cost aggregator will turn this into a
+ * hard cap.
+ *
+ * Returns the event unchanged for non-Agent tool_calls and for agents with
+ * no budget table entry. Intentionally lossy on shape mismatch — never
+ * throws, never short-circuits the persistence path.
+ */
+export function injectSoftBudget(
+  event: TaskEventInput,
+  budgetTable: Readonly<Record<string, number>>,
+): TaskEventInput {
+  if (event.type !== 'tool_call') return event;
+  const payload = event.payload;
+  if (payload.tool_name !== 'Agent') return event;
+  const input = payload.input as { agent_name?: unknown } | undefined;
+  const agentName = input?.agent_name;
+  if (typeof agentName !== 'string') return event;
+  const soft = budgetTable[agentName];
+  if (soft === undefined) return event;
+  return { ...event, payload: { ...payload, soft_budget_usd: soft } };
+}
+
+/**
+ * Reads `parent_tool_use_id` from the SDK message envelope. Defensive against
+ * SDK shape drift — returns null for any non-string value (including the
+ * documented `null` and the undocumented "missing").
+ */
+export function getMessageParentToolUseId(msg: SDKMessage): string | null {
+  const value = (msg as { parent_tool_use_id?: unknown }).parent_tool_use_id;
+  return typeof value === 'string' ? value : null;
+}
