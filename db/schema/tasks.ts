@@ -84,7 +84,6 @@ export const taskEvents = pgTable(
   },
   (t) => [
     index('task_events_task_id_idx').on(t.taskId, t.id),
-    index('task_events_run_seq_idx').on(t.runId, t.seq),
     uniqueIndex('task_events_run_seq_uq').on(t.runId, t.seq),
     check(
       'task_events_type_check',
