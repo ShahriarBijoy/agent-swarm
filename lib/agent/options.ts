@@ -7,15 +7,22 @@ import {
   WRITE_TOOL_FQN,
   memoryMcpServer,
 } from '@/lib/mcp/memory';
-import { FLEET_ANALYST_NAME, fleetAnalyst } from '@/lib/agent/agents/fleet-analyst';
+import { agentRegistry } from '@/lib/agent/agents';
 import { auditPreToolUse } from '@/lib/agent/hooks';
 
-export const ORCHESTRATOR_MODEL = 'claude-sonnet-4-6' as const;
+// Opus 4.7 full ID — full IDs ARE accepted on the orchestrator (only short
+// aliases are accepted on subagents per plan §3 footgun #2). Phase 08
+// promotes the dispatcher because routing under uncertainty is exactly
+// Opus's wheelhouse.
+export const ORCHESTRATOR_MODEL = 'claude-opus-4-7' as const;
 
-// Defensive defaults. Every phase-05 `query()` is hard-capped; the demo sets
-// tighter bounds as a second line of defense.
-export const DEFAULT_MAX_BUDGET_USD = 0.5;
-export const DEFAULT_MAX_TURNS = 20;
+// Phase 08 raises the per-run cap to absorb a worst-case Opus dispatcher +
+// 7-worker fan-out + one approved gate. Phase-05 demo at $0.5 / 20 turns is
+// too tight for any swarm topology — even two haiku workers + one approval
+// round-trip pushes past it once Opus is dispatching. The SDK still aborts
+// the run mid-turn when the cap is crossed.
+export const DEFAULT_MAX_BUDGET_USD = 1.5;
+export const DEFAULT_MAX_TURNS = 25;
 export const DEFAULT_MAX_THINKING_TOKENS = 8192;
 
 // `allowedTools` is the SDK's auto-allow fast-path: tools listed here skip
@@ -57,7 +64,7 @@ export function buildOrchestratorOptions(
 ): Options {
   return {
     model: ORCHESTRATOR_MODEL,
-    agents: { [FLEET_ANALYST_NAME]: fleetAnalyst },
+    agents: agentRegistry,
     allowedTools: [...ORCHESTRATOR_ALLOWED_TOOLS],
     mcpServers: { [MEMORY_SERVER_NAME]: memoryMcpServer },
     hooks: {
