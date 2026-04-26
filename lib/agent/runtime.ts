@@ -15,10 +15,15 @@ import {
   type BuildOrchestratorOptionsOverrides,
 } from '@/lib/agent/options';
 import {
+  extractAgentToolUseMapping,
+  getMessageParentToolUseId,
+  injectSoftBudget,
   mapMessageToEvents,
+  tagAgentName,
   type TaskEventInput,
 } from '@/lib/agent/persist';
 import { userPromptStream } from '@/lib/agent/approvals';
+import { AGENT_SOFT_BUDGET_USD } from '@/lib/agent/agents';
 
 export type RunOrchestratorArgs = {
   prompt: string;
@@ -125,6 +130,12 @@ export async function runOrchestrator(
   let finalText: string | null = null;
   let errorText: string | null = null;
 
+  // Phase-08 §6.1 — derive `payload.agent_name` from the SDK's
+  // `parent_tool_use_id` chain. Map populated when we see an `Agent`
+  // tool_call event; consumed when tagging downstream events whose
+  // parent_tool_use_id matches.
+  const agentByToolUseId = new Map<string, string>();
+
   try {
     // Phase 07: streaming-input mode. The SDK requires an AsyncIterable<
     // SDKUserMessage> as `prompt` whenever `canUseTool` is set; we pass the
@@ -155,17 +166,32 @@ export async function runOrchestrator(
       }
 
       const events = mapMessageToEvents(msg);
+      const parentToolUseId = getMessageParentToolUseId(msg);
       for (const ev of events) {
+        // Step 1: capture the dispatcher → worker mapping the moment we
+        // see the Agent tool_call (before we tag downstream events that
+        // will reference its tool_use_id).
+        const mapping = extractAgentToolUseMapping(ev);
+        if (mapping) {
+          agentByToolUseId.set(mapping.toolUseId, mapping.agentName);
+        }
+
+        // Step 2: tag with `agent_name`, then attach `soft_budget_usd`
+        // when the event is the dispatcher's Agent tool_call (no-op for
+        // every other event).
+        const tagged = tagAgentName(ev, parentToolUseId, agentByToolUseId);
+        const augmented = injectSoftBudget(tagged, AGENT_SOFT_BUDGET_USD);
+
         // Phase 07: appendTaskEventAuto computes seq atomically so the
         // canUseTool callback (separate writer) and the Server Action that
         // resolves a gate (third writer) never collide on (run_id, seq).
         const written = await appendTaskEventAuto({
           runId,
           taskId,
-          type: ev.type,
-          payload: ev.payload,
+          type: augmented.type,
+          payload: augmented.payload,
         });
-        const persisted: PersistedEvent = { ...ev, seq: written.seq };
+        const persisted: PersistedEvent = { ...augmented, seq: written.seq };
         safeCallback(() => args.onEvent?.(persisted));
       }
     }
