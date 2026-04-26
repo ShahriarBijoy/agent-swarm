@@ -28,6 +28,25 @@ export const BASH_WHITELIST: readonly RegExp[] = [
   /^pnpm\s+(test|test:watch|typecheck|lint|build|format)(\s|$)/,
 ];
 
+/**
+ * Phase-08 gated output paths. Every worker that "produces a deliverable" in
+ * the demo writes here; each path is fictional (no real Stripe call, no real
+ * email send) but the approval contract is real and the Inngest wait
+ * survives a Next.js restart.
+ *
+ * Patterns are anchored on a path boundary (start, /, or \) so look-alike
+ * names like `mydispatch-log/` or `my-invoices/` don't false-trigger.
+ */
+export const GATED_OUTPUT_PATHS: readonly RegExp[] = [
+  /(^|[\\/])dispatch-log[\\/]/,
+  /(^|[\\/])invoices[\\/]/,
+  /(^|[\\/])replies[\\/]/,
+];
+
+export function isGatedOutputPath(path: string): boolean {
+  return GATED_OUTPUT_PATHS.some((rx) => rx.test(path));
+}
+
 export function shouldRequireApproval(
   toolName: string,
   input: unknown,
@@ -50,7 +69,10 @@ export function shouldRequireApproval(
     };
   }
 
-  // 3. Write to source tree gates. Other writes (docs, /tmp) pass.
+  // 3. Write to source tree gates. Phase-08 also gates writes to demo
+  //    output dirs (dispatch-log/, invoices/, replies/). Source check runs
+  //    first so an `src/invoices/foo.json` edit is reported as a source
+  //    write, not a customer-invoice write.
   if (toolName === 'Write') {
     const path = readString(input, 'file_path');
     if (path === null) {
@@ -58,6 +80,9 @@ export function shouldRequireApproval(
     }
     if (isSourcePath(path)) {
       return { require: true, reason: `Write to source tree: ${path}` };
+    }
+    if (isGatedOutputPath(path)) {
+      return { require: true, reason: `Write to gated output path: ${path}` };
     }
     return { require: false };
   }
