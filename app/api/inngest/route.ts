@@ -1,6 +1,6 @@
 import { serve } from 'inngest/next';
 import { inngest } from '@/lib/inngest/client';
-import { taskStartedFn } from '@/lib/inngest/functions';
+import { memoryCleanupFn, taskStartedFn } from '@/lib/inngest/functions';
 
 /**
  * Serves the auto-ride Inngest functions. The dev server
@@ -14,5 +14,5 @@ export const dynamic = 'force-dynamic';
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [taskStartedFn],
+  functions: [taskStartedFn, memoryCleanupFn],
 });
