@@ -202,13 +202,19 @@ export const memoryCleanupFn = inngest.createFunction(
         .from(memoryCleanupProposals)
         .where(sql`${memoryCleanupProposals.runId} = ${runId}::uuid`);
 
+      // 'promote' lives in cleanupActionEnum for phase-04's deterministic
+      // streak path; the debate pipeline never emits it, so exclude it here
+      // (and keep the Action type narrow as 'prune'|'merge'|'keep').
       const verdicts: Verdict[] = inserted
-        .filter((r) => r.finalAction !== null)
+        .filter(
+          (r): r is typeof r & { finalAction: Action } =>
+            r.finalAction !== null && r.finalAction !== 'promote',
+        )
         .map((r) => ({
           proposalId: r.id,
           memoryId: r.memoryId,
           targetMemoryId: r.targetMemoryId,
-          finalAction: r.finalAction! as Action,
+          finalAction: r.finalAction,
         }));
       return applyVerdicts(verdicts);
     });
