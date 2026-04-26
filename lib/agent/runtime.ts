@@ -23,6 +23,7 @@ import {
   type TaskEventInput,
 } from '@/lib/agent/persist';
 import { userPromptStream } from '@/lib/agent/approvals';
+import { buildDispatcherPrompt } from '@/lib/agent/dispatcher-prompt';
 import { AGENT_SOFT_BUDGET_USD } from '@/lib/agent/agents';
 
 export type RunOrchestratorArgs = {
@@ -141,7 +142,7 @@ export async function runOrchestrator(
     // SDKUserMessage> as `prompt` whenever `canUseTool` is set; we pass the
     // single-message generator unconditionally so the contract is uniform.
     for await (const msg of query({
-      prompt: userPromptStream(args.prompt),
+      prompt: userPromptStream(buildDispatcherPrompt(args.prompt)),
       options,
     })) {
       if (isInitMessage(msg)) {
