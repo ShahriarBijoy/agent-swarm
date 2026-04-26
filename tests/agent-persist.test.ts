@@ -370,13 +370,13 @@ describe('tagAgentName', () => {
 });
 
 describe('extractAgentToolUseMapping', () => {
-  it('returns the mapping when event is a tool_call for the Agent tool with agent_name in input', () => {
+  it('returns the mapping when event is a tool_call for the Agent tool with subagent_type in input', () => {
     const event: TaskEventInput = {
       type: 'tool_call',
       payload: {
         tool_use_id: 'toolu_x',
         tool_name: 'Agent',
-        input: { agent_name: 'billing', prompt: 'invoice T-1' },
+        input: { subagent_type: 'billing', prompt: 'invoice T-1' },
       },
     };
     expect(extractAgentToolUseMapping(event)).toEqual({
@@ -388,7 +388,7 @@ describe('extractAgentToolUseMapping', () => {
   it('returns null for non-tool_call events', () => {
     const event: TaskEventInput = {
       type: 'assistant_turn',
-      payload: { tool_name: 'Agent', input: { agent_name: 'billing' } },
+      payload: { tool_name: 'Agent', input: { subagent_type: 'billing' } },
     };
     expect(extractAgentToolUseMapping(event)).toBeNull();
   });
@@ -405,7 +405,7 @@ describe('extractAgentToolUseMapping', () => {
     expect(extractAgentToolUseMapping(event)).toBeNull();
   });
 
-  it('returns null when input.agent_name is missing or non-string (SDK shape drift)', () => {
+  it('returns null when input.subagent_type is missing or non-string (SDK shape drift)', () => {
     const noAgent: TaskEventInput = {
       type: 'tool_call',
       payload: { tool_use_id: 'toolu_x', tool_name: 'Agent', input: { prompt: 'x' } },
@@ -417,7 +417,7 @@ describe('extractAgentToolUseMapping', () => {
       payload: {
         tool_use_id: 'toolu_x',
         tool_name: 'Agent',
-        input: { agent_name: 42, prompt: 'x' },
+        input: { subagent_type: 42, prompt: 'x' },
       },
     };
     expect(extractAgentToolUseMapping(numericAgent)).toBeNull();
@@ -428,7 +428,7 @@ describe('extractAgentToolUseMapping', () => {
       type: 'tool_call',
       payload: {
         tool_name: 'Agent',
-        input: { agent_name: 'billing' },
+        input: { subagent_type: 'billing' },
       },
     };
     expect(extractAgentToolUseMapping(event)).toBeNull();
@@ -444,7 +444,7 @@ describe('injectSoftBudget', () => {
       payload: {
         tool_use_id: 'toolu_x',
         tool_name: 'Agent',
-        input: { agent_name: 'billing' },
+        input: { subagent_type: 'billing' },
       },
     };
     const out = injectSoftBudget(event, budgetTable);
@@ -454,7 +454,7 @@ describe('injectSoftBudget', () => {
   it('returns the event unchanged for non-tool_call events', () => {
     const event: TaskEventInput = {
       type: 'assistant_turn',
-      payload: { input: { agent_name: 'billing' } },
+      payload: { input: { subagent_type: 'billing' } },
     };
     const out = injectSoftBudget(event, budgetTable);
     expect(out).toBe(event);
@@ -472,7 +472,7 @@ describe('injectSoftBudget', () => {
   it('returns the event unchanged when the agent name is not in the budget table', () => {
     const event: TaskEventInput = {
       type: 'tool_call',
-      payload: { tool_use_id: 't', tool_name: 'Agent', input: { agent_name: 'unknown' } },
+      payload: { tool_use_id: 't', tool_name: 'Agent', input: { subagent_type: 'unknown' } },
     };
     const out = injectSoftBudget(event, budgetTable);
     expect(out).toBe(event);
@@ -484,7 +484,7 @@ describe('injectSoftBudget', () => {
       payload: {
         tool_use_id: 'toolu_x',
         tool_name: 'Agent',
-        input: { agent_name: 'support', prompt: 'reply' },
+        input: { subagent_type: 'support', prompt: 'reply' },
         parent_tool_use_id: null,
       },
     };

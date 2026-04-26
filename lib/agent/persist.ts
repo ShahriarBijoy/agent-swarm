@@ -213,8 +213,12 @@ export function tagAgentName(
  * (toolUseId, agentName) pair the runtime should remember in its
  * agentByToolUseId map. Returns null for any event that doesn't carry the
  * expected shape — including non-tool_call events, non-Agent tool_calls, and
- * tool_calls whose `input.agent_name` is missing or non-string (defensive
+ * tool_calls whose `input.subagent_type` is missing or non-string (defensive
  * against SDK shape drift; spec §13 risk #2).
+ *
+ * The SDK's `AgentInput` (sdk-tools.d.ts) uses `subagent_type` as the worker
+ * key — not `agent_name`. Reading the wrong field would silently break every
+ * worker tag and the soft-budget injection.
  */
 export function extractAgentToolUseMapping(
   event: TaskEventInput,
@@ -224,8 +228,8 @@ export function extractAgentToolUseMapping(
   if (payload.tool_name !== 'Agent') return null;
   const toolUseId = payload.tool_use_id;
   if (typeof toolUseId !== 'string') return null;
-  const input = payload.input as { agent_name?: unknown } | undefined;
-  const agentName = input?.agent_name;
+  const input = payload.input as { subagent_type?: unknown } | undefined;
+  const agentName = input?.subagent_type;
   if (typeof agentName !== 'string') return null;
   return { toolUseId, agentName };
 }
@@ -248,8 +252,8 @@ export function injectSoftBudget(
   if (event.type !== 'tool_call') return event;
   const payload = event.payload;
   if (payload.tool_name !== 'Agent') return event;
-  const input = payload.input as { agent_name?: unknown } | undefined;
-  const agentName = input?.agent_name;
+  const input = payload.input as { subagent_type?: unknown } | undefined;
+  const agentName = input?.subagent_type;
   if (typeof agentName !== 'string') return event;
   const soft = budgetTable[agentName];
   if (soft === undefined) return event;

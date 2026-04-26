@@ -280,13 +280,13 @@ agent_name(event):
   else:
     look up the matching `tool_call` (where tool_use_id == event.parent_tool_use_id)
     if tool_call.tool_name == 'Agent':
-      return tool_call.input.agent_name        // SDK puts it on the Agent tool input
+      return tool_call.input.subagent_type     // SDK's AgentInput uses `subagent_type`, not `agent_name`
     else:
       // unusual: nested non-Agent parent (shouldn't happen with flat fan-out)
       return 'unknown'
 ```
 
-Implementation: `runOrchestrator` maintains a `Map<string /* tool_use_id */, string /* agent_name */>` populated when it sees an `Agent` `tool_call` (whose `input.agent_name` is the spawned worker's name). When `mapMessageToEvents` produces an event, the runtime augments each event's `payload.agent_name` from this map by walking the `parent_tool_use_id` once.
+Implementation: `runOrchestrator` maintains a `Map<string /* tool_use_id */, string /* agent_name */>` populated when it sees an `Agent` `tool_call` (whose `input.subagent_type` is the spawned worker's name — see `@anthropic-ai/claude-agent-sdk`'s `AgentInput` in `sdk-tools.d.ts`). When `mapMessageToEvents` produces an event, the runtime augments each event's `payload.agent_name` from this map by walking the `parent_tool_use_id` once.
 
 ```ts
 // runtime.ts — sketch
@@ -300,10 +300,11 @@ function tagAgentName(event: TaskEventInput, parentToolUseId: string | null): Ta
   return { ...event, payload: { ...event.payload, agent_name: agentName } };
 }
 
-// when we see a tool_call event for the Agent tool, capture the mapping:
+// when we see a tool_call event for the Agent tool, capture the mapping.
+// NB: SDK's AgentInput keys the worker name as `subagent_type`, not `agent_name`.
 if (ev.type === 'tool_call' && ev.payload.tool_name === 'Agent') {
   const childToolUseId = ev.payload.tool_use_id as string;
-  const childAgentName = (ev.payload.input as { agent_name?: unknown })?.agent_name;
+  const childAgentName = (ev.payload.input as { subagent_type?: unknown })?.subagent_type;
   if (typeof childAgentName === 'string') {
     agentByToolUseId.set(childToolUseId, childAgentName);
   }
@@ -325,8 +326,8 @@ The SDK does not surface per-message dollar costs (only the run-level total in `
   payload: {
     tool_use_id: '...',
     tool_name: 'Agent',
-    input: { agent_name: 'billing', ... },
-    agent_name: 'dispatcher',                    // who's calling Agent
+    input: { subagent_type: 'billing', ... },    // SDK's AgentInput shape
+    agent_name: 'dispatcher',                    // who's calling Agent (our augmentation)
     soft_budget_usd: 0.20,                       // looked up from the registry
     parent_tool_use_id: null,
     session_id: '...',
@@ -587,7 +588,7 @@ The prefix lives in code (not a markdown file) so it's typechecked, greppable, a
 3. **`tests/agents/definitions.test.ts`** asserts per worker: `model in {'haiku','sonnet'}`, `model` does not match `/^claude-/`, `maxTurns` matches the agent table, `prompt.length > 100`, `tools` matches the declared `*_TOOLS` constant, `mcp__memory__forget` only appears in `reflector.tools`.
 4. **`tests/agent-options.test.ts`** asserts: `ORCHESTRATOR_MODEL === 'claude-opus-4-7'`, `DEFAULT_MAX_BUDGET_USD === 1.5`, `DEFAULT_MAX_TURNS === 25`, `buildOrchestratorOptions().agents` has exactly the 10 keys, `Bash` and `Write` are NOT in `allowedTools`.
 5. **`tests/approval-policy.test.ts`** is extended with: `Write` to `dispatch-log/foo.txt` → gated, `Write` to `invoices/T-1.json` → gated, `Write` to `replies/r-1.md` → gated, `Write` to `docs/x.md` → still passes, memory tools → still pass.
-6. **`tests/agent-persist.test.ts`** is extended with: a fixture run where the orchestrator emits one `Agent` tool_call (input.agent_name = `'billing'`) followed by an assistant_turn with `parent_tool_use_id` matching that tool_use_id — the augmenter assigns `payload.agent_name === 'billing'` to the assistant_turn. Dispatcher's own messages (`parent_tool_use_id: null`) get `agent_name === 'dispatcher'`.
+6. **`tests/agent-persist.test.ts`** is extended with: a fixture run where the orchestrator emits one `Agent` tool_call (input.subagent_type = `'billing'`) followed by an assistant_turn with `parent_tool_use_id` matching that tool_use_id — the augmenter assigns `payload.agent_name === 'billing'` to the assistant_turn. Dispatcher's own messages (`parent_tool_use_id: null`) get `agent_name === 'dispatcher'`.
 7. **A demo run** dispatched to `incident-responder` (prompt: "Vehicle V-09 went offline; triage and log to dispatch-log/.") produces:
    - One `tool_call` (Agent → incident-responder) with `payload.agent_name: 'dispatcher'`, `payload.soft_budget_usd: 0.25`.
    - At least one `assistant_turn` with `payload.agent_name: 'incident-responder'`.
