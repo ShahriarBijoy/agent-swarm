@@ -22,6 +22,20 @@
       "when": 1776726018889,
       "tag": "0002_seed_segment_config",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1777162466200,
+      "tag": "0003_drop_task_events_run_seq_idx",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1777162519379,
+      "tag": "0004_memory_links_proposal_fk",
+      "breakpoints": true
     }
   ]
 }
