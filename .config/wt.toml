@@ -1,0 +1,24 @@
+# Worktrunk project config — Auto-Ride
+# See CLAUDE.md for the phase-based worktree workflow.
+#
+# IMPORTANT: do NOT run `wt merge`. Phases ship via GitHub PRs to main
+# (one PR per phase, see gitworkflow.md). Use:
+#   wt switch --create phase/<NN>-<kebab>   # start a phase worktree
+#   wt step commit                          # LLM-generated commit message
+#   gh pr create --title "phase NN: ..."    # open the PR
+#   wt remove phase/<NN>-<kebab>            # after the PR merges
+#
+# Identity is set in the shared .git/config and inherited by every worktree,
+# so no pre-start identity hook is needed.
+
+# Push branch to origin on first commit (CLAUDE.md requirement: branches
+# must be visible on GitHub from the first commit). Idempotent — only fires
+# while upstream is unset; subsequent commits are no-ops.
+post-commit = "{% if not upstream %}git push -u origin {{ branch }}{% endif %}"
+
+# pre-commit / pre-merge are intentionally empty until source code lands.
+# When the Next.js phase ships, add e.g.:
+#   pre-commit = "pnpm lint && pnpm typecheck"
+#   pre-merge  = "pnpm test"
+# (Reminder: this repo's `pnpm install` hangs — see CLAUDE.md / memory —
+#  so install deps manually before relying on these hooks.)
