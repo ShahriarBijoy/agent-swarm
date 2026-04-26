@@ -3,7 +3,7 @@ import {
   fleetAnalyst,
   FLEET_ANALYST_NAME,
   FLEET_ANALYST_TOOLS,
-} from '@/lib/agent/fleet-analyst';
+} from '@/lib/agent/agents/fleet-analyst';
 import {
   buildOrchestratorOptions,
   ORCHESTRATOR_ALLOWED_TOOLS,

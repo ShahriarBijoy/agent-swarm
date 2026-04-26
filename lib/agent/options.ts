@@ -7,7 +7,7 @@ import {
   WRITE_TOOL_FQN,
   memoryMcpServer,
 } from '@/lib/mcp/memory';
-import { FLEET_ANALYST_NAME, fleetAnalyst } from '@/lib/agent/fleet-analyst';
+import { FLEET_ANALYST_NAME, fleetAnalyst } from '@/lib/agent/agents/fleet-analyst';
 import { auditPreToolUse } from '@/lib/agent/hooks';
 
 export const ORCHESTRATOR_MODEL = 'claude-sonnet-4-6' as const;
