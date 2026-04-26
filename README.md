@@ -140,6 +140,57 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
    - Turbopack hot-reload during a live wait works the same way — the killed process is just another reason for the function to exit.
    - The Server Action has no auth in phase 07; treat the dev server as local-only. Phase 11's Better Auth gates it.
 
+10. **Phase 08 — full 11-agent swarm.** The orchestrator promotes to `claude-opus-4-7` (full ID — full IDs are accepted on the orchestrator only) and routes prompts to one of ten workers via the `Agent` tool. Workers use short-alias models (`'haiku' | 'sonnet'`); full IDs on subagents silently fall back to `inherit` and burn the orchestrator's tier. The default per-run cap rises to **$1.5 / 25 turns** to absorb a worst-case Opus dispatcher + multi-worker fan-out + one approved gate.
+
+    The ten workers (all defined under `lib/agent/agents/`):
+
+    | # | Name                  | Model  | Tools                                                              |
+    |---|-----------------------|--------|--------------------------------------------------------------------|
+    | 1 | `fleet-analyst`       | haiku  | Read + memory                                                       |
+    | 2 | `maintenance-planner` | sonnet | Read + Grep + Write + memory                                        |
+    | 3 | `billing`             | sonnet | Read + **gated Write to `invoices/`** + memory                       |
+    | 4 | `support`             | sonnet | Read + **gated Write to `replies/`** + memory                        |
+    | 5 | `reflector`           | sonnet | Read + memory + **`mcp__memory__forget` (only worker)**              |
+    | 6 | `route-optimizer`     | haiku  | Read + Grep + memory                                                |
+    | 7 | `incident-responder`  | sonnet | Read + Bash (whitelisted) + **gated Write to `dispatch-log/`** + memory |
+    | 8 | `driver-coach`        | haiku  | Read + Grep + memory                                                |
+    | 9 | `compliance-auditor`  | haiku  | Read + Grep + memory                                                |
+    | 10| `analytics-reporter`  | haiku  | Read + Grep + memory                                                |
+
+    Three new gated path patterns join the phase-07 `src/` gate: `dispatch-log/`, `invoices/`, `replies/`. Source-tree gate still wins on overlap (e.g., `src/invoices/foo.json` is reported as a source write).
+
+    Every persisted `task_events` row now carries `payload.agent_name` derived deterministically from the SDK's `parent_tool_use_id` chain (`'dispatcher'` for the orchestrator's own messages, the worker's name for any event whose parent chain leads back to an `Agent` tool_call). Phase 10 will use this to colour the timeline by agent and chart per-agent metrics.
+
+    **Demo a billing dispatch (gated Write to `invoices/`):**
+
+    - Open `http://localhost:3000/tasks` and create a task with prompt:
+      ```
+      Generate an invoice for trip T-998.
+      ```
+    - The timeline should show:
+      - `tool_call` for `Agent` with `payload.agent_name: 'dispatcher'` and `payload.soft_budget_usd: 0.20`.
+      - `assistant_turn` events with `payload.agent_name: 'billing'` once the worker is spawned.
+      - A `tool_call` for `Write` targeting `invoices/T-998.json` — this opens an `approval_gates` row with `status='pending'`.
+    - Click **Approve** in the bar. The gate flips to `approved`, the SDK resumes, the file is "written", and the run terminates `done`.
+
+    **Demo an incident-responder dispatch (gated Write to `dispatch-log/`):**
+
+    - Create a task with prompt:
+      ```
+      Vehicle V-09 just went offline; triage and log it to dispatch-log/.
+      ```
+    - The timeline should show:
+      - `tool_call` for `Agent` with `payload.agent_name: 'dispatcher'` and `payload.soft_budget_usd: 0.25`.
+      - At least one `assistant_turn` with `payload.agent_name: 'incident-responder'`.
+      - One `Write` to `dispatch-log/v-09.md` opening an `approval_gates` row.
+    - Click **Approve**. The run completes.
+
+    **Caveats**
+    - Auth is Max OAuth for this build (per `auto-ride-initial-plan.md` §2 carve-out): the dollar figures `task_runs.total_cost_usd` reports are **notional** — what the run would have cost on the API. No real $ is charged; usage meters against the Max plan's 5-hour token quota. The `maxBudgetUsd: 1.5` cap is still enforced — the SDK aborts on the notional figure even on Max, which is the safety property we rely on.
+    - Memory writes (`mcp__memory__write`, `mcp__memory__reinforce`, `mcp__memory__forget`) are deliberately **un-gated** — they are the project's whole point and gating them would turn every demo into a click-fest. Memory destructiveness is bounded by phase-04's tombstone-not-delete + phase-09's adversarial cleanup.
+    - The dispatcher does NOT have `Bash` or `Write` in its allowedTools — if a workflow needs those, the dispatcher must dispatch to `incident-responder` (Bash + Write) or one of the other Write-capable workers. This makes the dispatcher physically incapable of "doing it itself" for many workflows.
+    - Per-agent dollar enforcement is observability-only in phase 08. Each `Agent` tool_call event carries `payload.soft_budget_usd` for the spawned worker; phase 10's per-agent dashboard surfaces actual-vs-budget; phase 12's cost aggregator turns the soft cap into a hard one.
+
 ## Scripts
 
 | Script | Purpose |
