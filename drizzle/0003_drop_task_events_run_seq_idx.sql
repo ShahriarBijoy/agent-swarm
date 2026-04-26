@@ -1,0 +1,1 @@
+DROP INDEX "task_events_run_seq_idx";
