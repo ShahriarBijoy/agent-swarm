@@ -67,7 +67,7 @@ export function parseJudgeSafe(raw: string): JudgeVerdict {
 }
 
 /** Models sometimes wrap JSON in ```json fences. Strip them defensively. */
-function stripFences(raw: string): string {
+export function stripFences(raw: string): string {
   const trimmed = raw.trim();
   if (trimmed.startsWith('```')) {
     const inner = trimmed.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '');

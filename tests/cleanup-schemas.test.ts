@@ -75,4 +75,11 @@ describe('cleanup schemas', () => {
     );
     expect(result.finalAction).toBe('prune');
   });
+
+  it('parseAdversarySafe handles ```json fence wrapping', () => {
+    const fenced =
+      '```json\n{"memoryId":"11111111-1111-1111-8111-111111111111","adversaryConfidence":0.9,"objection":"test"}\n```';
+    const result = parseAdversarySafe(fenced);
+    expect(result.adversaryConfidence).toBe(0.9);
+  });
 });
