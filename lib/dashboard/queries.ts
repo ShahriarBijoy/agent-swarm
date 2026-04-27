@@ -334,7 +334,7 @@ export async function getMemorySegmentsSnapshot(): Promise<SegmentSnapshot> {
 export type KanbanColumn = 'queued' | 'in_progress' | 'awaiting_approval' | 'done' | 'failed';
 
 export function deriveKanbanColumn(
-  status: 'queued' | 'in_progress' | 'done' | 'failed' | 'cancelled',
+  status: 'queued' | 'in_progress' | 'awaiting_approval' | 'done' | 'failed' | 'cancelled',
   gateOpen: boolean,
 ): KanbanColumn {
   if (status === 'in_progress' && gateOpen) return 'awaiting_approval';
@@ -446,6 +446,10 @@ export async function getAgentMetrics(name: string): Promise<AgentMetrics> {
     ORDER BY r.started_at DESC LIMIT 50
   `);
 
+  // FIXME(phase-10/task-28): always returns [] — `tool_name` lives on `tool_call` events,
+  // not `tool_result`, and recall results are stringified JSON inside `content[].text`,
+  // not a structured `tool_result.memories` JSONB sub-object. Task 28 must either rewrite
+  // this (join tool_call+tool_result, parse text blobs) or render "(data not yet captured)".
   const top = await db.execute(sql`
     WITH recalls AS (
       SELECT jsonb_array_elements(payload->'tool_result'->'memories') AS m
@@ -526,7 +530,7 @@ export async function getMemories(
       ${filter.bucket ? sql`m.bucket = ${filter.bucket}` : sql`true`}
       AND ${filter.segment ? sql`m.segment::text = ${filter.segment}` : sql`true`}
       AND ${filter.cleanupTouched ? sql`p.action IS NOT NULL` : sql`true`}
-    ORDER BY m.id DESC
+    ORDER BY m.created_at DESC, m.id DESC
     OFFSET ${page * pageSize} LIMIT ${pageSize}
   `);
   type Row = {
@@ -539,7 +543,13 @@ export async function getMemories(
     accessCount: number;
     cleanupVerdict: string | null;
   };
-  const tot = await db.execute(sql`SELECT count(*)::int AS total FROM memories`);
+  const tot = await db.execute(sql`
+    SELECT count(*)::int AS total FROM memories m
+    WHERE
+      ${filter.bucket ? sql`m.bucket = ${filter.bucket}` : sql`true`}
+      AND ${filter.segment ? sql`m.segment::text = ${filter.segment}` : sql`true`}
+      AND ${filter.cleanupTouched ? sql`EXISTS (SELECT 1 FROM memory_cleanup_proposals p WHERE p.memory_id = m.id)` : sql`true`}
+  `);
   return {
     rows: toRows<Row>(rows).map((r) => ({
       id: r.id,

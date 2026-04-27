@@ -13,6 +13,8 @@ describe('deriveKanbanColumn', () => {
     ['failed', false, 'failed'],
     ['failed', true, 'failed'],
     ['cancelled', false, 'failed'], // collapse cancelled into the failed column
+    ['awaiting_approval', false, 'awaiting_approval'],
+    ['awaiting_approval', true, 'awaiting_approval'], // gate-open redundant once status is already awaiting_approval
   ] as const)('status=%s gateOpen=%s -> %s', (status, gateOpen, expected) => {
     expect(deriveKanbanColumn(status, gateOpen)).toBe(expected);
   });
