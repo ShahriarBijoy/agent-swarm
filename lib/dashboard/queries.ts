@@ -280,3 +280,53 @@ export async function getLastCleanup(): Promise<LastCleanupSnapshot> {
     contested: Number(r.contested),
   };
 }
+
+export type CostLineSnapshot = {
+  days: { date: Date; total: number; opusOnly: number }[];
+};
+
+export async function getCostLine12Mo(): Promise<CostLineSnapshot> {
+  const rows = await db.execute(sql`
+    SELECT
+      date_trunc('day', started_at) AS d,
+      coalesce(sum(total_cost_usd), 0)::float AS total,
+      0::float AS opus_only
+    FROM task_runs
+    WHERE started_at >= now() - interval '365 days'
+    GROUP BY d
+    ORDER BY d ASC
+  `);
+  // opus_only is a placeholder — wire from task_events.payload->>'model' filter in a follow-up
+  // when payload reliably carries the model field on every event.
+  type Row = { d: Date | string; total: number; opus_only: number };
+  return {
+    days: toRows<Row>(rows).map((r) => ({
+      date: r.d instanceof Date ? r.d : new Date(r.d),
+      total: Number(r.total),
+      opusOnly: Number(r.opus_only),
+    })),
+  };
+}
+
+export type SegmentSnapshot = {
+  segments: { id: string; count: number; avgImportance: number }[];
+};
+
+export async function getMemorySegmentsSnapshot(): Promise<SegmentSnapshot> {
+  const rows = await db.execute(sql`
+    SELECT segment::text AS id,
+           count(*)::int AS count,
+           coalesce(avg(importance), 0)::float AS avg_importance
+    FROM memories
+    GROUP BY segment
+    ORDER BY avg_importance DESC NULLS LAST
+  `);
+  type Row = { id: string; count: number; avg_importance: number };
+  return {
+    segments: toRows<Row>(rows).map((r) => ({
+      id: r.id,
+      count: Number(r.count),
+      avgImportance: Number(r.avg_importance),
+    })),
+  };
+}
