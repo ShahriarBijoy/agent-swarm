@@ -1,5 +1,6 @@
 // components/dashboard/widget-registry.ts
 import type { ComponentType } from 'react';
+import { greetingDef } from './widgets/greeting';
 
 export type WidgetId =
   | 'greeting'
@@ -26,4 +27,11 @@ export type WidgetDef<TData = unknown> = {
   Component: ComponentType<{ data: TData }>;
 };
 
-export const WIDGET_REGISTRY = {} as Record<WidgetId, WidgetDef>;
+// Use `WidgetDef<any>` here because `WidgetDef<TData>` is invariant in `TData`
+// (the `Component` prop makes it so), and concrete widget defs like
+// `WidgetDef<GreetingSnapshot>` would otherwise not be assignable to
+// `WidgetDef<unknown>`. Task 24 will tighten this to a fully-specified registry.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
+  greeting: greetingDef,
+};
