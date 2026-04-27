@@ -85,14 +85,17 @@ export const memoryCleanupFn = inngest.createFunction(
     { event: CLEANUP_REQUESTED },
   ],
   async ({ event, step, logger }) => {
-    // Step 0: env-flag kill switch (outside step.run — pure check, idempotent)
-    if (process.env.MEMORY_CLEANUP_CRON_ENABLED === 'false') {
-      logger.info('[cleanup] disabled by MEMORY_CLEANUP_CRON_ENABLED=false');
+    const triggeredByCron = event === undefined || event.name !== CLEANUP_REQUESTED;
+
+    // Step 0: cron kill switch (outside step.run — pure check, idempotent).
+    // Manual triggers via auto-ride/cleanup.requested bypass the flag so
+    // ad-hoc demos can run while the production cron is disabled.
+    if (triggeredByCron && process.env.MEMORY_CLEANUP_CRON_ENABLED === 'false') {
+      logger.info('[cleanup] cron disabled by MEMORY_CLEANUP_CRON_ENABLED=false');
       return { skipped: true, reason: 'env-flag' as const };
     }
 
     // Same-day idempotency: cron skips on duplicate; manual proceeds.
-    const triggeredByCron = event === undefined || event.name !== CLEANUP_REQUESTED;
     if (triggeredByCron) {
       const dupe = await step.run('check-same-day-completed', async () => {
         const result = (await db.execute(sql`
