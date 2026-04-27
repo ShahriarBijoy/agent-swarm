@@ -3,6 +3,7 @@ import type { ComponentType } from 'react';
 import { greetingDef } from './widgets/greeting';
 import { allAgentsDef } from './widgets/all-agents';
 import { hitlQueueDef } from './widgets/hitl-queue';
+import { memoryWritesLimeDef } from './widgets/memory-writes-lime';
 
 export type WidgetId =
   | 'greeting'
@@ -38,4 +39,5 @@ export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
   greeting: greetingDef,
   'all-agents': allAgentsDef,
   'hitl-queue': hitlQueueDef,
+  'memory-writes-lime': memoryWritesLimeDef,
 };
