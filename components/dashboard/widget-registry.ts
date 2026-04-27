@@ -35,19 +35,21 @@ export type WidgetDef<TData = unknown> = {
   Component: ComponentType<{ data: TData }>;
 };
 
-// Use `WidgetDef<any>` here because `WidgetDef<TData>` is invariant in `TData`
-// (the `Component` prop makes it so), and concrete widget defs like
-// `WidgetDef<GreetingSnapshot>` would otherwise not be assignable to
-// `WidgetDef<unknown>`. Task 24 will tighten this to a fully-specified registry.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
-  greeting: greetingDef,
-  'all-agents': allAgentsDef,
-  'mini-canvas': miniCanvasDef,
-  'hitl-queue': hitlQueueDef,
-  'memory-writes-lime': memoryWritesLimeDef,
-  'cleanup-last-night': cleanupLastNightDef,
-  'cost-line-12mo': costLine12MoDef,
-  'memory-segments-ring': memorySegmentsRingDef,
-  'active-workers-black': activeWorkersBlackDef,
+export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {
+  'greeting':              greetingDef as WidgetDef,
+  'all-agents':            allAgentsDef as WidgetDef,
+  'mini-canvas':           miniCanvasDef as WidgetDef,
+  'hitl-queue':            hitlQueueDef as WidgetDef,
+  'memory-writes-lime':    memoryWritesLimeDef as WidgetDef,
+  'cleanup-last-night':    cleanupLastNightDef as WidgetDef,
+  'cost-line-12mo':        costLine12MoDef as WidgetDef,
+  'memory-segments-ring':  memorySegmentsRingDef as WidgetDef,
+  'active-workers-black':  activeWorkersBlackDef as WidgetDef,
 };
+
+export function variantFor(id: WidgetId): 'default' | 'warm' | 'lime' | 'black' {
+  if (id === 'memory-writes-lime') return 'lime';
+  if (id === 'active-workers-black') return 'black';
+  if (id === 'cleanup-last-night' || id === 'memory-segments-ring') return 'warm';
+  return 'default';
+}
