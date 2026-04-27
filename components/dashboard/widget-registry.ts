@@ -2,6 +2,7 @@
 import type { ComponentType } from 'react';
 import { greetingDef } from './widgets/greeting';
 import { allAgentsDef } from './widgets/all-agents';
+import { hitlQueueDef } from './widgets/hitl-queue';
 
 export type WidgetId =
   | 'greeting'
@@ -36,4 +37,5 @@ export type WidgetDef<TData = unknown> = {
 export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
   greeting: greetingDef,
   'all-agents': allAgentsDef,
+  'hitl-queue': hitlQueueDef,
 };
