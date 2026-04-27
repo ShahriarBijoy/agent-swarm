@@ -16,6 +16,7 @@ import type {
   TimelineEventType,
 } from '@/components/timeline/types';
 import { ApprovalBar } from './approval-bar';
+import { CanvasView } from './canvas-view';
 import { TimelineStream } from './timeline-stream';
 
 export const dynamic = 'force-dynamic';
@@ -58,10 +59,14 @@ function serializeGate(g: GateSummary): GateSummary {
 
 export default async function TaskPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ view?: string }>;
 }) {
   const { id } = await params;
+  const { view: viewParam } = await searchParams;
+  const view = viewParam === 'stream' ? 'stream' : 'canvas';
   const task = await getTaskById(id);
   if (!task) notFound();
 
@@ -72,6 +77,15 @@ export default async function TaskPage({
   const initialEvents = serializeEvents(rows);
   const initialTerminal = terminalFromTask(task);
   const initialGates = pendingGatesRaw.map(serializeGate);
+
+  // Derive run timing window from the events list to avoid an extra query.
+  // For non-terminal tasks `endedAt` stays null so the scrubber treats the
+  // current wall clock as "now" and the canvas-view streams live.
+  const startedAt = (rows[0]?.createdAt ?? new Date()).toISOString();
+  const endedAt =
+    initialTerminal && rows.length > 0
+      ? rows[rows.length - 1]!.createdAt.toISOString()
+      : null;
 
   return (
     <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
@@ -100,11 +114,43 @@ export default async function TaskPage({
 
       <ApprovalBar taskId={task.id} initialGates={initialGates} />
 
-      <TimelineStream
-        taskId={task.id}
-        initialEvents={initialEvents}
-        initialTerminal={initialTerminal}
-      />
+      <div className="mb-3 flex gap-2">
+        <Link
+          href={`?view=canvas`}
+          className={`rounded-full px-3 py-1.5 text-[12px] ${
+            view === 'canvas'
+              ? 'bg-[var(--color-ink)] text-[var(--color-surface)]'
+              : 'border border-[var(--color-line-strong)]'
+          }`}
+        >
+          Canvas
+        </Link>
+        <Link
+          href={`?view=stream`}
+          className={`rounded-full px-3 py-1.5 text-[12px] ${
+            view === 'stream'
+              ? 'bg-[var(--color-ink)] text-[var(--color-surface)]'
+              : 'border border-[var(--color-line-strong)]'
+          }`}
+        >
+          Stream
+        </Link>
+      </div>
+
+      {view === 'canvas' ? (
+        <CanvasView
+          initialEvents={initialEvents}
+          startedAt={startedAt}
+          endedAt={endedAt}
+          taskId={task.id}
+        />
+      ) : (
+        <TimelineStream
+          taskId={task.id}
+          initialEvents={initialEvents}
+          initialTerminal={initialTerminal}
+        />
+      )}
     </main>
   );
 }
