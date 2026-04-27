@@ -3,9 +3,8 @@ import type { GreetingSnapshot } from '@/lib/dashboard/queries';
 import type { WidgetDef } from '../widget-registry';
 import { getGreetingSnapshot } from '@/lib/dashboard/queries';
 
-const OPERATOR_NAME = process.env.OPERATOR_NAME || 'Operator';
-
 export function Greeting({ data }: { data: GreetingSnapshot }) {
+  const operatorName = process.env.OPERATOR_NAME ?? 'Operator';
   const max = Math.max(...data.months.map((m) => m.count), 1);
   const fmt = new Intl.NumberFormat('en-US');
   const cost = data.monthCostUsd;
@@ -14,7 +13,7 @@ export function Greeting({ data }: { data: GreetingSnapshot }) {
   return (
     <div className="flex h-full flex-col gap-6">
       <h2 className="text-[28px] font-medium leading-[1.1] tracking-tight">
-        Hi {OPERATOR_NAME},{' '}
+        Hi {operatorName},{' '}
         <span className="font-serif-italic">here&apos;s</span> what&apos;s
         <br />happening in your swarm.
       </h2>
