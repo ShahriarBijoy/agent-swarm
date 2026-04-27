@@ -17,6 +17,10 @@ type SqlRef = SQL | AnyColumn | SQL.Aliased;
  * The caller owns the JOIN between `memories` and `memory_segment_config`; this helper
  * only composes the math. `asOf` defaults to `now()`; override it with a `sql`timestamp`
  * fragment for deterministic time-travel in tests or promotion-evaluation.
+ *
+ * NOTE: This formula is also inlined in `db/queries/cleanup-candidates.ts` because the
+ * UNION-ALL alias machinery there is awkward when reusing this helper. If you change
+ * the formula here, mirror the change in `cleanup-candidates.ts`.
  */
 export function effectiveImportanceSql(refs: {
   bucket: SqlRef;

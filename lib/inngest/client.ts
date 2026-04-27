@@ -1,6 +1,10 @@
 import { EventSchemas, Inngest } from 'inngest';
-import type { ApprovalDecidedData, TaskStartedData } from './events';
-import { APPROVAL_DECIDED, TASK_STARTED } from './events';
+import type {
+  ApprovalDecidedData,
+  CleanupRequestedData,
+  TaskStartedData,
+} from './events';
+import { APPROVAL_DECIDED, CLEANUP_REQUESTED, TASK_STARTED } from './events';
 
 /**
  * Inngest event registry. We use `fromRecord` (TS-types only) instead of
@@ -13,6 +17,7 @@ import { APPROVAL_DECIDED, TASK_STARTED } from './events';
 type AutoRideEvents = {
   [TASK_STARTED]: { data: TaskStartedData };
   [APPROVAL_DECIDED]: { data: ApprovalDecidedData };
+  [CLEANUP_REQUESTED]: { data: CleanupRequestedData };
 };
 
 /**
