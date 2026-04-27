@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { sql } from 'drizzle-orm';
 import { db } from '@/db/client';
 import { memoryCleanupRuns, memoryCleanupProposals } from '@/db/schema/cleanup';
@@ -8,6 +7,7 @@ import { expireTombstones } from '@/db/queries/memory-lifecycle';
 import { runDebate } from '@/lib/cleanup/debate';
 import { CostCapExceededError } from '@/lib/cleanup/errors';
 import { MAX_RUN_USD } from '@/lib/cleanup/cost-tracker';
+import { runAgentSdkCall } from '@/lib/cleanup/llm';
 import type { Action } from '@/lib/cleanup/schemas';
 import { inngest } from './client';
 import { CLEANUP_REQUESTED, TASK_STARTED } from './events';
@@ -154,8 +154,7 @@ export const memoryCleanupFn = inngest.createFunction(
     let debateResult;
     try {
       debateResult = await step.run('debate', async () => {
-        const client = new Anthropic();
-        return runDebate({ candidates, client, maxRunUsd: MAX_RUN_USD });
+        return runDebate({ candidates, llm: runAgentSdkCall, maxRunUsd: MAX_RUN_USD });
       });
     } catch (err) {
       const message = err instanceof CostCapExceededError ? err.message : String(err);

@@ -1,4 +1,3 @@
-import Anthropic from '@anthropic-ai/sdk';
 import {
   ConsolidatorBatchSchema,
   stripFences,
@@ -10,6 +9,7 @@ import {
   type CandidateRow,
 } from './prompts';
 import { computeCallCostUsd, ROLE_MODEL } from './cost-tracker';
+import type { LlmCall } from './llm';
 
 export interface ConsolidatorRunResult {
   proposals: ConsolidatorProposal[];
@@ -25,17 +25,15 @@ export interface ConsolidatorRunResult {
  */
 export async function runConsolidator(
   batch: CandidateRow[],
-  client: Anthropic,
+  llm: LlmCall,
 ): Promise<ConsolidatorRunResult> {
-  const response = await client.messages.create({
+  const { text, usage } = await llm({
     model: ROLE_MODEL.consolidator,
-    max_tokens: 2048,
     system: consolidatorSystemPrompt(),
-    messages: [{ role: 'user', content: consolidatorUserPrompt(batch) }],
+    userPrompt: consolidatorUserPrompt(batch),
   });
 
-  const costUsd = computeCallCostUsd(ROLE_MODEL.consolidator, response.usage);
-  const text = extractText(response);
+  const costUsd = computeCallCostUsd(ROLE_MODEL.consolidator, usage);
 
   try {
     const parsed = ConsolidatorBatchSchema.parse(JSON.parse(stripFences(text)));
@@ -43,11 +41,4 @@ export async function runConsolidator(
   } catch {
     return { proposals: [], costUsd, parseFailed: true };
   }
-}
-
-function extractText(response: Anthropic.Message): string {
-  return response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
 }

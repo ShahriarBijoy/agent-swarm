@@ -1,10 +1,10 @@
-import type Anthropic from '@anthropic-ai/sdk';
 import type { CandidateRow } from './prompts';
 import type { ConsolidatorProposal, AdversaryResponse, JudgeVerdict } from './schemas';
 import { runConsolidator } from './consolidator';
 import { runAdversary } from './adversary';
 import { runJudge } from './judge';
 import { CostCapExceededError } from './errors';
+import type { LlmCall } from './llm';
 
 export const JUDGE_THRESHOLD = 0.7;
 export const CONSOLIDATOR_BATCH_SIZE = 10;
@@ -20,7 +20,7 @@ export interface DebateProposalRecord {
 
 export interface DebateRunArgs {
   candidates: CandidateRow[];
-  client: Anthropic;
+  llm: LlmCall;
   maxRunUsd: number;
 }
 
@@ -40,7 +40,7 @@ export interface DebateRunResult {
  * the run row failed.
  */
 export async function runDebate(args: DebateRunArgs): Promise<DebateRunResult> {
-  const { candidates, client, maxRunUsd } = args;
+  const { candidates, llm, maxRunUsd } = args;
   let costUsd = 0;
   let parseFailures = 0;
   const allProposals: DebateProposalRecord[] = [];
@@ -50,7 +50,7 @@ export async function runDebate(args: DebateRunArgs): Promise<DebateRunResult> {
   for (let i = 0; i < candidates.length; i += CONSOLIDATOR_BATCH_SIZE) {
     if (costUsd >= maxRunUsd) throw new CostCapExceededError(costUsd, maxRunUsd);
     const batch = candidates.slice(i, i + CONSOLIDATOR_BATCH_SIZE);
-    const r = await runConsolidator(batch, client);
+    const r = await runConsolidator(batch, llm);
     costUsd += r.costUsd;
     if (r.parseFailed) {
       parseFailures += 1;
@@ -74,7 +74,7 @@ export async function runDebate(args: DebateRunArgs): Promise<DebateRunResult> {
   for (const record of allProposals) {
     if (costUsd >= maxRunUsd) throw new CostCapExceededError(costUsd, maxRunUsd);
     const cand = candidateById.get(record.memoryId)!;
-    const r = await runAdversary(record.consolidator, cand, client);
+    const r = await runAdversary(record.consolidator, cand, llm);
     costUsd += r.costUsd;
     record.adversary = r.response;
   }
@@ -88,7 +88,7 @@ export async function runDebate(args: DebateRunArgs): Promise<DebateRunResult> {
     contested += 1;
     if (costUsd >= maxRunUsd) throw new CostCapExceededError(costUsd, maxRunUsd);
     const cand = candidateById.get(record.memoryId)!;
-    const r = await runJudge(record.consolidator, record.adversary.objection, cand, client);
+    const r = await runJudge(record.consolidator, record.adversary.objection, cand, llm);
     costUsd += r.costUsd;
     record.judge = r.verdict;
     record.finalAction = r.verdict.finalAction;

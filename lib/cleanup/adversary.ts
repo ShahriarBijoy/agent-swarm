@@ -1,7 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
 import { parseAdversarySafe, type AdversaryResponse, type ConsolidatorProposal } from './schemas';
 import { adversarySystemPrompt, adversaryUserPrompt, type CandidateRow } from './prompts';
 import { computeCallCostUsd, ROLE_MODEL } from './cost-tracker';
+import type { LlmCall } from './llm';
 
 export interface AdversaryRunResult {
   response: AdversaryResponse;
@@ -15,21 +15,15 @@ export interface AdversaryRunResult {
 export async function runAdversary(
   proposal: ConsolidatorProposal,
   candidate: CandidateRow,
-  client: Anthropic,
+  llm: LlmCall,
 ): Promise<AdversaryRunResult> {
-  const response = await client.messages.create({
+  const { text, usage } = await llm({
     model: ROLE_MODEL.adversary,
-    max_tokens: 512,
     system: adversarySystemPrompt(),
-    messages: [{ role: 'user', content: adversaryUserPrompt(proposal, candidate) }],
+    userPrompt: adversaryUserPrompt(proposal, candidate),
   });
 
-  const costUsd = computeCallCostUsd(ROLE_MODEL.adversary, response.usage);
-  const text = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
-
+  const costUsd = computeCallCostUsd(ROLE_MODEL.adversary, usage);
   const parsed = parseAdversarySafe(text);
   // Override the fallback memoryId with the proposal's so downstream code
   // can correlate. Confidence stays whatever parseAdversarySafe returned.

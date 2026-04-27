@@ -28,7 +28,6 @@
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.117",
-    "@anthropic-ai/sdk": "0.81.0",
     "@google/genai": "1.50.1",
     "@hugeicons/core-free-icons": "^4.1.1",
     "@hugeicons/react": "^1.1.6",
