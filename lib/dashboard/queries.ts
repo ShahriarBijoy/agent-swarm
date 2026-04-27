@@ -330,3 +330,232 @@ export async function getMemorySegmentsSnapshot(): Promise<SegmentSnapshot> {
     })),
   };
 }
+
+export type KanbanColumn = 'queued' | 'in_progress' | 'awaiting_approval' | 'done' | 'failed';
+
+export function deriveKanbanColumn(
+  status: 'queued' | 'in_progress' | 'done' | 'failed' | 'cancelled',
+  gateOpen: boolean,
+): KanbanColumn {
+  if (status === 'in_progress' && gateOpen) return 'awaiting_approval';
+  if (status === 'cancelled') return 'failed';
+  return status as KanbanColumn;
+}
+
+export type TaskWithGate = {
+  id: string;
+  prompt: string;
+  status: string;
+  createdAt: Date;
+  agentCount: number;
+  costUsd: number;
+  hasOpenGate: boolean;
+};
+
+export async function getKanbanBoard(): Promise<Record<KanbanColumn, TaskWithGate[]>> {
+  const rows = await db.execute(sql`
+    SELECT t.id, t.prompt, t.status::text AS status, t.created_at,
+      coalesce((
+        SELECT count(DISTINCT payload->>'agent_name')
+        FROM task_events
+        WHERE task_events.task_id = t.id AND payload->>'agent_name' IS NOT NULL
+      ), 0)::int AS agent_count,
+      coalesce((
+        SELECT max(total_cost_usd) FROM task_runs WHERE task_id = t.id
+      ), 0)::float AS cost_usd,
+      EXISTS(
+        SELECT 1 FROM approval_gates g WHERE g.task_id = t.id AND g.status = 'pending'
+      ) AS has_open_gate
+    FROM tasks t
+    ORDER BY t.created_at DESC
+    LIMIT 200
+  `);
+  type Row = {
+    id: string; prompt: string; status: string; created_at: Date | string;
+    agent_count: number; cost_usd: number; has_open_gate: boolean;
+  };
+  const board: Record<KanbanColumn, TaskWithGate[]> = {
+    queued: [], in_progress: [], awaiting_approval: [], done: [], failed: [],
+  };
+  for (const r of toRows<Row>(rows)) {
+    const col = deriveKanbanColumn(r.status as never, Boolean(r.has_open_gate));
+    board[col].push({
+      id: r.id,
+      prompt: r.prompt,
+      status: r.status,
+      createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
+      agentCount: Number(r.agent_count),
+      costUsd: Number(r.cost_usd),
+      hasOpenGate: Boolean(r.has_open_gate),
+    });
+  }
+  return board;
+}
+
+export type AgentMetrics = {
+  p50LatencyMs: number;
+  p95LatencyMs: number;
+  dailyTokens: { date: Date; tokens: number }[];
+  successRate: number;
+  recentRuns: { runId: string; taskId: string; startedAt: Date; status: string; costUsd: number }[];
+  topMemories: { memoryId: string; recallCount: number; excerpt: string }[];
+};
+
+export async function getAgentMetrics(name: string): Promise<AgentMetrics> {
+  const lat = await db.execute(sql`
+    WITH ev AS (
+      SELECT created_at,
+             lag(created_at) OVER (PARTITION BY run_id ORDER BY id) AS prev_at
+      FROM task_events
+      WHERE payload->>'agent_name' = ${name}
+        AND created_at >= now() - interval '30 days'
+    )
+    SELECT
+      percentile_cont(0.50) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (created_at - prev_at)) * 1000) AS p50,
+      percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (created_at - prev_at)) * 1000) AS p95
+    FROM ev
+    WHERE prev_at IS NOT NULL
+  `);
+  const lr = toRows<{ p50: number; p95: number }>(lat)[0];
+
+  const tokens = await db.execute(sql`
+    SELECT date_trunc('day', created_at) AS d,
+           coalesce(sum((payload->'usage'->>'input_tokens')::int + (payload->'usage'->>'output_tokens')::int), 0)::int AS t
+    FROM task_events
+    WHERE payload->>'agent_name' = ${name} AND created_at >= now() - interval '30 days'
+    GROUP BY d ORDER BY d ASC
+  `);
+
+  const success = await db.execute(sql`
+    SELECT
+      coalesce(sum(case when r.status='done' then 1 else 0 end)::float, 0) /
+      nullif(count(*), 0) AS rate
+    FROM task_runs r
+    WHERE EXISTS (
+      SELECT 1 FROM task_events e
+      WHERE e.run_id = r.id AND payload->>'agent_name' = ${name}
+    ) AND r.started_at >= now() - interval '30 days'
+  `);
+
+  const recent = await db.execute(sql`
+    SELECT r.id AS run_id, r.task_id, r.started_at, r.status::text AS status, r.total_cost_usd::float AS cost_usd
+    FROM task_runs r
+    WHERE EXISTS (
+      SELECT 1 FROM task_events e WHERE e.run_id = r.id AND payload->>'agent_name' = ${name}
+    )
+    ORDER BY r.started_at DESC LIMIT 50
+  `);
+
+  const top = await db.execute(sql`
+    WITH recalls AS (
+      SELECT jsonb_array_elements(payload->'tool_result'->'memories') AS m
+      FROM task_events
+      WHERE payload->>'agent_name' = ${name}
+        AND payload->>'tool_name' = 'mcp__memory__recall'
+        AND created_at >= now() - interval '30 days'
+    )
+    SELECT m->>'id' AS memory_id, count(*)::int AS recall_count, max(m->>'content') AS excerpt
+    FROM recalls WHERE m->>'id' IS NOT NULL
+    GROUP BY memory_id ORDER BY recall_count DESC LIMIT 10
+  `);
+
+  return {
+    p50LatencyMs: Number(lr?.p50 ?? 0),
+    p95LatencyMs: Number(lr?.p95 ?? 0),
+    dailyTokens: toRows<{ d: Date | string; t: number }>(tokens).map((r) => ({
+      date: r.d instanceof Date ? r.d : new Date(r.d),
+      tokens: Number(r.t),
+    })),
+    successRate: Number(toRows<{ rate: number }>(success)[0]?.rate ?? 0),
+    recentRuns: toRows<{ run_id: string; task_id: string; started_at: Date | string; status: string; cost_usd: number }>(recent).map((r) => ({
+      runId: r.run_id,
+      taskId: r.task_id,
+      startedAt: r.started_at instanceof Date ? r.started_at : new Date(r.started_at),
+      status: r.status,
+      costUsd: Number(r.cost_usd),
+    })),
+    topMemories: toRows<{ memory_id: string; recall_count: number; excerpt: string }>(top).map((r) => ({
+      memoryId: r.memory_id,
+      recallCount: Number(r.recall_count),
+      excerpt: r.excerpt ?? '',
+    })),
+  };
+}
+
+export type MemoriesFilter = {
+  bucket?: 'short' | 'long' | 'permanent' | null;
+  segment?: string | null;
+  cleanupTouched?: boolean;
+};
+
+export type MemoriesPage = {
+  rows: {
+    id: string;
+    content: string;
+    bucket: string;
+    segment: string;
+    importance: number;
+    lastRecallAt: Date | null;
+    accessCount: number;
+    cleanupVerdict: string | null;
+  }[];
+  total: number;
+};
+
+export async function getMemories(
+  filter: MemoriesFilter,
+  page: number,
+  pageSize: number = 100,
+): Promise<MemoriesPage> {
+  const rows = await db.execute(sql`
+    SELECT
+      m.id                            AS "id",
+      substr(m.content, 1, 240)       AS "content",
+      m.bucket::text                  AS "bucket",
+      m.segment::text                 AS "segment",
+      m.importance::float             AS "importance",
+      m.last_accessed_at              AS "lastRecallAt",
+      m.access_count                  AS "accessCount",
+      p.action                        AS "cleanupVerdict"
+    FROM memories m
+    LEFT JOIN LATERAL (
+      SELECT action FROM memory_cleanup_proposals
+      WHERE memory_id = m.id ORDER BY id DESC LIMIT 1
+    ) p ON ${filter.cleanupTouched ? sql`true` : sql`false`}
+    WHERE
+      ${filter.bucket ? sql`m.bucket = ${filter.bucket}` : sql`true`}
+      AND ${filter.segment ? sql`m.segment::text = ${filter.segment}` : sql`true`}
+      AND ${filter.cleanupTouched ? sql`p.action IS NOT NULL` : sql`true`}
+    ORDER BY m.id DESC
+    OFFSET ${page * pageSize} LIMIT ${pageSize}
+  `);
+  type Row = {
+    id: string;
+    content: string;
+    bucket: string;
+    segment: string;
+    importance: number;
+    lastRecallAt: Date | string | null;
+    accessCount: number;
+    cleanupVerdict: string | null;
+  };
+  const tot = await db.execute(sql`SELECT count(*)::int AS total FROM memories`);
+  return {
+    rows: toRows<Row>(rows).map((r) => ({
+      id: r.id,
+      content: r.content,
+      bucket: r.bucket,
+      segment: r.segment,
+      importance: Number(r.importance),
+      lastRecallAt:
+        r.lastRecallAt == null
+          ? null
+          : r.lastRecallAt instanceof Date
+            ? r.lastRecallAt
+            : new Date(r.lastRecallAt),
+      accessCount: Number(r.accessCount),
+      cleanupVerdict: r.cleanupVerdict,
+    })),
+    total: Number(toRows<{ total: number }>(tot)[0]?.total ?? 0),
+  };
+}
