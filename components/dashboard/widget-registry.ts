@@ -1,6 +1,7 @@
 // components/dashboard/widget-registry.ts
 import type { ComponentType } from 'react';
 import { greetingDef } from './widgets/greeting';
+import { allAgentsDef } from './widgets/all-agents';
 
 export type WidgetId =
   | 'greeting'
@@ -34,4 +35,5 @@ export type WidgetDef<TData = unknown> = {
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
   greeting: greetingDef,
+  'all-agents': allAgentsDef,
 };
