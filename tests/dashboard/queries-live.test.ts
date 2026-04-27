@@ -30,7 +30,14 @@ skipSuite('phase-10 live queries', () => {
 
   it('getOpenApprovalGates returns only pending rows', async () => {
     const rows = await getOpenApprovalGates();
-    rows.forEach((row) => expect(row.status).toBe('pending'));
+    rows.forEach((row) => {
+      expect(row.status).toBe('pending');
+      // bug guard: camelCase keys must be present (snake-case must NOT)
+      expect(row).toHaveProperty('taskId');
+      expect(row).toHaveProperty('taskPrompt');
+      expect((row as unknown as Record<string, unknown>).task_id).toBeUndefined();
+      expect((row as unknown as Record<string, unknown>).task_prompt).toBeUndefined();
+    });
   });
 
   it('getMemoryWritesToday returns shape {count, deltaVsYesterday}', async () => {

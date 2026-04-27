@@ -177,7 +177,12 @@ export async function getActiveRun(): Promise<ActiveRunSnapshot | null> {
   if (!r) return null;
 
   const events = await db.execute(sql`
-    SELECT id, seq, type, payload, created_at
+    SELECT
+      id          AS "id",
+      seq         AS "seq",
+      type        AS "type",
+      payload     AS "payload",
+      created_at  AS "createdAt"
     FROM task_events
     WHERE run_id = ${r.run_id}
     ORDER BY id ASC
@@ -192,7 +197,7 @@ export async function getActiveRun(): Promise<ActiveRunSnapshot | null> {
       totalInputTokens: r.total_input_tokens,
       totalOutputTokens: r.total_output_tokens,
     },
-    events: toRows<TaskEvent>(events),
+    events: toRows<Pick<TaskEvent, 'id' | 'seq' | 'type' | 'payload' | 'createdAt'>>(events),
   };
 }
 
@@ -200,7 +205,21 @@ export type OpenGate = ApprovalGate & { taskPrompt: string };
 
 export async function getOpenApprovalGates(): Promise<OpenGate[]> {
   const rows = await db.execute(sql`
-    SELECT g.*, t.prompt AS task_prompt
+    SELECT
+      g.id                AS "id",
+      g.run_id            AS "runId",
+      g.task_id           AS "taskId",
+      g.tool_name         AS "toolName",
+      g.proposed_input    AS "proposedInput",
+      g.status            AS "status",
+      g.resolution_input  AS "resolutionInput",
+      g.reviewer_note     AS "reviewerNote",
+      g.reviewer_id       AS "reviewerId",
+      g.inngest_event_key AS "inngestEventKey",
+      g.created_at        AS "createdAt",
+      g.resolved_at       AS "resolvedAt",
+      g.timed_out_at      AS "timedOutAt",
+      t.prompt            AS "taskPrompt"
     FROM approval_gates g
     JOIN tasks t ON t.id = g.task_id
     WHERE g.status = 'pending'
