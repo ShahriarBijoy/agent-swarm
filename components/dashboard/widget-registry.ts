@@ -5,6 +5,7 @@ import { allAgentsDef } from './widgets/all-agents';
 import { hitlQueueDef } from './widgets/hitl-queue';
 import { memoryWritesLimeDef } from './widgets/memory-writes-lime';
 import { cleanupLastNightDef } from './widgets/cleanup-last-night';
+import { costLine12MoDef } from './widgets/cost-line-12mo';
 
 export type WidgetId =
   | 'greeting'
@@ -42,4 +43,5 @@ export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
   'hitl-queue': hitlQueueDef,
   'memory-writes-lime': memoryWritesLimeDef,
   'cleanup-last-night': cleanupLastNightDef,
+  'cost-line-12mo': costLine12MoDef,
 };
