@@ -6,6 +6,7 @@ import { hitlQueueDef } from './widgets/hitl-queue';
 import { memoryWritesLimeDef } from './widgets/memory-writes-lime';
 import { cleanupLastNightDef } from './widgets/cleanup-last-night';
 import { costLine12MoDef } from './widgets/cost-line-12mo';
+import { memorySegmentsRingDef } from './widgets/memory-segments-ring';
 
 export type WidgetId =
   | 'greeting'
@@ -44,4 +45,5 @@ export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
   'memory-writes-lime': memoryWritesLimeDef,
   'cleanup-last-night': cleanupLastNightDef,
   'cost-line-12mo': costLine12MoDef,
+  'memory-segments-ring': memorySegmentsRingDef,
 };
