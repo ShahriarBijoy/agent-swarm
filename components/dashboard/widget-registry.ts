@@ -2,6 +2,7 @@
 import type { ComponentType } from 'react';
 import { greetingDef } from './widgets/greeting';
 import { allAgentsDef } from './widgets/all-agents';
+import { miniCanvasDef } from './widgets/mini-canvas';
 import { hitlQueueDef } from './widgets/hitl-queue';
 import { memoryWritesLimeDef } from './widgets/memory-writes-lime';
 import { cleanupLastNightDef } from './widgets/cleanup-last-night';
@@ -42,6 +43,7 @@ export type WidgetDef<TData = unknown> = {
 export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
   greeting: greetingDef,
   'all-agents': allAgentsDef,
+  'mini-canvas': miniCanvasDef,
   'hitl-queue': hitlQueueDef,
   'memory-writes-lime': memoryWritesLimeDef,
   'cleanup-last-night': cleanupLastNightDef,
