@@ -1,6 +1,13 @@
 // lib/dashboard/queries.ts
 import { db } from '@/db/client';
 import { sql } from 'drizzle-orm';
+import type { InferSelectModel } from 'drizzle-orm';
+import { tasks, taskRuns, taskEvents, approvalGates } from '@/db/schema';
+
+type Task = InferSelectModel<typeof tasks>;
+type TaskRun = InferSelectModel<typeof taskRuns>;
+type TaskEvent = InferSelectModel<typeof taskEvents>;
+type ApprovalGate = InferSelectModel<typeof approvalGates>;
 
 // drizzle-orm/neon-http's db.execute() returns `{ rows: [...] }` (FullQueryResults),
 // not a bare array. Other queries in this repo (see db/queries/task-runtime.ts)
@@ -144,4 +151,113 @@ export async function getActiveWorkers(): Promise<ActiveWorkersSnapshot> {
   const activeAgentNames = rows.map((r) => r.agent).filter(Boolean);
 
   return { activeAgentNames, totalAgents: 11 };
+}
+
+export type ActiveRunSnapshot = {
+  task: Pick<Task, 'id' | 'prompt' | 'createdAt'>;
+  run: Pick<TaskRun, 'id' | 'startedAt' | 'totalCostUsd' | 'totalInputTokens' | 'totalOutputTokens'>;
+  events: Pick<TaskEvent, 'id' | 'seq' | 'type' | 'payload' | 'createdAt'>[];
+};
+
+export async function getActiveRun(): Promise<ActiveRunSnapshot | null> {
+  const runs = await db.execute(sql`
+    SELECT r.id AS run_id, r.task_id, r.started_at, r.total_cost_usd, r.total_input_tokens, r.total_output_tokens,
+           t.prompt, t.created_at AS task_created_at
+    FROM task_runs r
+    JOIN tasks t ON t.id = r.task_id
+    WHERE r.status = 'in_progress'
+    ORDER BY r.started_at DESC
+    LIMIT 1
+  `);
+  type Row = {
+    run_id: string; task_id: string; started_at: Date; total_cost_usd: string;
+    total_input_tokens: number; total_output_tokens: number; prompt: string; task_created_at: Date;
+  };
+  const r = toRows<Row>(runs)[0];
+  if (!r) return null;
+
+  const events = await db.execute(sql`
+    SELECT id, seq, type, payload, created_at
+    FROM task_events
+    WHERE run_id = ${r.run_id}
+    ORDER BY id ASC
+    LIMIT 200
+  `);
+  return {
+    task: { id: r.task_id, prompt: r.prompt, createdAt: r.task_created_at },
+    run: {
+      id: r.run_id,
+      startedAt: r.started_at,
+      totalCostUsd: r.total_cost_usd as unknown as TaskRun['totalCostUsd'],
+      totalInputTokens: r.total_input_tokens,
+      totalOutputTokens: r.total_output_tokens,
+    },
+    events: toRows<TaskEvent>(events),
+  };
+}
+
+export type OpenGate = ApprovalGate & { taskPrompt: string };
+
+export async function getOpenApprovalGates(): Promise<OpenGate[]> {
+  const rows = await db.execute(sql`
+    SELECT g.*, t.prompt AS task_prompt
+    FROM approval_gates g
+    JOIN tasks t ON t.id = g.task_id
+    WHERE g.status = 'pending'
+    ORDER BY g.created_at ASC
+    LIMIT 20
+  `);
+  return toRows<OpenGate>(rows);
+}
+
+export type MemoryWritesTodaySnapshot = {
+  count: number;
+  deltaVsYesterday: number;
+};
+
+export async function getMemoryWritesToday(): Promise<MemoryWritesTodaySnapshot> {
+  const r = await db.execute(sql`
+    SELECT
+      (SELECT count(*)::int FROM memories
+        WHERE created_at >= date_trunc('day', now())) AS today,
+      (SELECT count(*)::int FROM memories
+        WHERE created_at >= date_trunc('day', now()) - interval '1 day'
+          AND created_at <  date_trunc('day', now())) AS yesterday
+  `);
+  const row = toRows<{ today: number; yesterday: number }>(r)[0];
+  return {
+    count: Number(row?.today ?? 0),
+    deltaVsYesterday: Number(row?.today ?? 0) - Number(row?.yesterday ?? 0),
+  };
+}
+
+export type LastCleanupSnapshot = {
+  runStartedAt: Date;
+  promoted: number;
+  pruned: number;
+  contested: number;
+} | null;
+
+export async function getLastCleanup(): Promise<LastCleanupSnapshot> {
+  const rows = await db.execute(sql`
+    SELECT r.id, r.started_at,
+      coalesce(sum(case when p.action = 'promote' then 1 else 0 end), 0)::int AS promoted,
+      coalesce(sum(case when p.action = 'prune'   then 1 else 0 end), 0)::int AS pruned,
+      r.proposals_contested AS contested
+    FROM memory_cleanup_runs r
+    LEFT JOIN memory_cleanup_proposals p ON p.run_id = r.id
+    WHERE r.status = 'completed'
+    GROUP BY r.id
+    ORDER BY r.started_at DESC
+    LIMIT 1
+  `);
+  type Row = { id: string; started_at: Date | string; promoted: number; pruned: number; contested: number };
+  const r = toRows<Row>(rows)[0];
+  if (!r) return null;
+  return {
+    runStartedAt: r.started_at instanceof Date ? r.started_at : new Date(r.started_at),
+    promoted: Number(r.promoted),
+    pruned: Number(r.pruned),
+    contested: Number(r.contested),
+  };
 }
