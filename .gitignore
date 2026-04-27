@@ -1,6 +1,9 @@
 # Parallel phase worktrees — see gitworkflow.md
 .worktree/
 
+# Brainstorming visual companion — local-only mockups
+.superpowers/
+
 # Planning / implementation docs — kept private
 *.md
 !README.md
