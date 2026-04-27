@@ -7,6 +7,7 @@ import { memoryWritesLimeDef } from './widgets/memory-writes-lime';
 import { cleanupLastNightDef } from './widgets/cleanup-last-night';
 import { costLine12MoDef } from './widgets/cost-line-12mo';
 import { memorySegmentsRingDef } from './widgets/memory-segments-ring';
+import { activeWorkersBlackDef } from './widgets/active-workers-black';
 
 export type WidgetId =
   | 'greeting'
@@ -46,4 +47,5 @@ export const WIDGET_REGISTRY: Partial<Record<WidgetId, WidgetDef<any>>> = {
   'cleanup-last-night': cleanupLastNightDef,
   'cost-line-12mo': costLine12MoDef,
   'memory-segments-ring': memorySegmentsRingDef,
+  'active-workers-black': activeWorkersBlackDef,
 };
