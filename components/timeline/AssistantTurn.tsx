@@ -1,3 +1,9 @@
+import {
+  Reasoning,
+  ReasoningContent,
+  ReasoningTrigger,
+} from '@/components/ai-elements/reasoning';
+
 type AssistantContentBlock =
   | { type: 'text'; text: string }
   | { type: 'thinking'; thinking: string }
@@ -26,32 +32,22 @@ export function AssistantTurn({
   const thinkingBlocks = blocks.filter(
     (b): b is { type: 'thinking'; thinking: string } => b.type === 'thinking',
   );
+  const thinkingText = thinkingBlocks.map((b) => b.thinking).join('\n\n');
 
   return (
     <article
       data-type="assistant_turn"
-      className="flex flex-col gap-2 rounded-md border border-border bg-card p-4"
+      className="flex flex-col gap-2 rounded-md border border-border bg-card p-4 text-card-foreground"
     >
       <header className="flex items-baseline justify-between text-xs text-muted-foreground">
         <span className="uppercase tracking-wide">assistant</span>
         <span className="font-mono">{`seq=${seq}`}</span>
       </header>
-      {thinkingBlocks.length > 0 && (
-        <details className="text-xs text-muted-foreground">
-          <summary className="cursor-pointer select-none">
-            thinking ({thinkingBlocks.length})
-          </summary>
-          <div className="mt-1 space-y-1">
-            {thinkingBlocks.map((b, i) => (
-              <pre
-                key={i}
-                className="whitespace-pre-wrap rounded bg-muted p-2 font-mono text-xs"
-              >
-                {b.thinking}
-              </pre>
-            ))}
-          </div>
-        </details>
+      {thinkingText && (
+        <Reasoning className="mb-0" defaultOpen={false}>
+          <ReasoningTrigger />
+          <ReasoningContent>{thinkingText}</ReasoningContent>
+        </Reasoning>
       )}
       {textBlocks.length > 0 ? (
         <div className="space-y-2 text-sm leading-relaxed">

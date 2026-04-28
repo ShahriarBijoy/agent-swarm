@@ -228,6 +228,50 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
     - Idempotency: cron skips silently if a `completed` run exists for today; manual events always proceed.
     - Cost figures are notional under Max OAuth (same caveat as phase 08).
 
+12. **Phase 10 — operator dashboard.** A read-only window onto everything phases 02–09 produce: a light-mode bento home, a full agent canvas with a play-driven scrubber, a kanban over `tasks × open-gate`, per-agent metric pages, and a filterable memory browser. The dashboard speaks to Postgres only — no dashboard file imports the Agent SDK (an invariant test enforces it).
+
+    ```bash
+    # Single terminal — no Inngest required to look around
+    pnpm dev -p 3100
+    ```
+
+    Then in the browser:
+
+    | Route | What you see |
+    |---|---|
+    | `/` | Bento home — 9 widgets: greeting, all-agents stats, mini-canvas of the active (or most-recent) run, HITL queue, today's memory writes, last-night cleanup, 12-month cost line, memory-segments ring, active workers |
+    | `/tasks` | 5-column kanban: `queued / in_progress / awaiting_approval / done / failed` (the awaiting column is derived from `status='in_progress' ∧ open gate`). The header's **+ New task** button opens a dialog with the prompt form so the kanban stays in view while you queue work |
+    | `/tasks/<uuid>?view=canvas\|stream` | Same task, two views switched via Radix Tabs that mirror to `?view=` so refresh / shared link keeps the chosen pane. Canvas is React Flow over the org chart; Stream is the phase-06/07 SSE timeline now rendered through the AI-Elements `<Tool>` / `<Reasoning>` cards |
+    | `/agents` | Worker roster — Frame-wrapped table of all 10 workers with status badges, soft-budget, and last-activated. Click a row to open a per-worker dialog with 30-day stats (runs, total cost, success rate); the dialog has a **View full metrics →** link to the detail page below |
+    | `/agents/<name>` | Per-agent page — p50/p95 latency, daily-token bar chart (shadcn/ui chart over Recharts), success rate, recent runs, top-recalled memories. `<name>` must match a worker registered in `lib/agent/agents/` (the dispatcher is not a worker) |
+    | `/memories` | Filterable browser — `c-filters-7`-style chip filters over bucket × segment × cleanup-verdict, a sortable @tanstack/react-table DataGrid with pagination, and click-row → dialog for the full record. Importance renders as an inline progress bar; the cleanup verdict (`promote / prune / merge / keep`) is colour-coded |
+
+    **Architecture notes**
+    - Each home widget is a `WidgetDef` with `{ id, name, gridArea, refreshMs, load, Component, Footer?, panelClassName? }`. The cell renders a reui `<Frame>` ↦ `<FramePanel>` (and optional `<FrameFooter>` for widgets like the cost line whose summary stats live below the chart). Server-rendered once on first paint, then the client polls `/api/dashboard?widget=<id>` on the widget's `refreshMs` cadence (`useDashboardPoll` pauses on `document.hidden` and dedups in-flight requests).
+    - The active-run mini-canvas and the 12-month cost line are split across two files each: a `<name>.tsx` server module that owns the `WidgetDef` and a `<name>-view.tsx` client module that owns the JSX. This keeps the registry's `load` function a real server function across the React Server Component boundary instead of a serialized client reference.
+    - The mini-canvas tile picks the run to feature as: (1) `status='in_progress'` AND a `task_event` in the last 10 minutes — the "truly live" definition that ignores stale rows that leaked as in-progress when a process crashed without closing its run, (2) otherwise the most recent run of any status. The widget's heading flips between **Active swarm run · LIVE** and **Last swarm run · {status}** based on an `isLive` flag returned by the query.
+    - `canvas-layout.ts` is a pure `(events, asOfMs?) → { nodes, edges }` function. The first pass derives the **structure** (which workers exist + their delegation edges) from the full events list so the topology is stable across cursor changes; the second pass applies state (active / hitl / done / chips) from events `<= asOfMs`. Without that split, scrubbing during replay added/removed worker nodes mid-render and React Flow dropped the dispatcher → worker edge until live mode resumed.
+    - `<CanvasScrubber>` exposes a Play/Pause control. Pressing play kicks an 8-second `requestAnimationFrame` loop that drives the cursor from start to end; the bar's `transform: scaleX()` runs on the compositor via a CSS transition, so the visual fill stays smooth even during the heavy React Flow re-renders the cursor triggers.
+    - `tests/dashboard/invariants.test.ts` enforces three guardrails: the dashboard tree never imports `@anthropic-ai/claude-agent-sdk`, every `WidgetId` has a registered `{ load, Component, gridArea }`, and home widgets never import `recharts` directly (they must dynamic-import it so the home bundle stays under budget).
+
+    **Component story (vendored, not external).** Phase 10 brought in three component registries via shadcn (`components.json` adds `@reui` and `@ai-elements` registries on top of stock shadcn):
+
+    | Folder | Source | Used for |
+    |---|---|---|
+    | `components/ui/*` | shadcn (`radix-maia` style) | Primitives — `dialog`, `tabs`, `table`, `select`, `dropdown-menu`, `tooltip`, `popover`, `avatar`, `badge`, `card`, `calendar`, `breadcrumb`, `button-group`, `kbd`, `field`, `input-group`, `skeleton`, `spinner`, `alert`, `checkbox`, `collapsible`, `separator`, `textarea` |
+    | `components/reui/*` | reui (registry pulled at install) | Higher-level — `<Frame>` family (the bento + dialog shell), `<DataGrid>` over @tanstack/react-table, `<Filters>` chip-bar, `<Kanban>`, `<Timeline>`, `<DateSelector>`, themed `<Badge>`, `<Alert>` |
+    | `components/ai-elements/*` | Vercel AI SDK Elements | Timeline polish — `<Tool>` / `<ToolHeader>` / `<ToolContent>` / `<ToolInput>` for tool calls, `<Reasoning>` collapsible for `<thinking>` blocks, `<Confirmation>` for approval cards |
+
+    These are **vendored** — installed once via `pnpm dlx shadcn@latest add ...` and committed under `components/{ui,reui,ai-elements}/`. Edit them as needed; they're our code now.
+
+    **End-to-end check**
+
+    ```bash
+    pnpm test:e2e
+    ```
+
+    Playwright spawns the dev server via the `webServer` config and visits the five routes plus a 404 sanity check.
+
 ## Scripts
 
 | Script | Purpose |
@@ -236,6 +280,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm inngest:dev` | Inngest CLI dev server on port 8288 — durable workflow broker for phase 07 HITL (run alongside `pnpm dev`) |
 | `pnpm build` / `pnpm start` | Production build / server |
 | `pnpm test` / `pnpm test:watch` | vitest |
+| `pnpm test:e2e` | Playwright E2E across the phase-10 dashboard routes (spawns its own dev server on 3100) |
 | `pnpm typecheck` | `tsc --noEmit` under strict |
 | `pnpm lint` / `pnpm format` | ESLint / Prettier |
 | `pnpm db:generate` | Generate a Drizzle migration |

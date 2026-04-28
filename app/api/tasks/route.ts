@@ -61,8 +61,8 @@ export async function POST(req: Request): Promise<Response> {
       { status: 200 },
     );
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    console.error('[api/tasks] dispatch failed:', message);
+    const raw = err instanceof Error ? err.message : String(err);
+    console.error('[api/tasks] dispatch failed:', raw);
     // If the task row was created but the Inngest send failed, finalize it
     // to `failed` so the SSE stream terminates instead of polling forever.
     if (id) {
@@ -72,6 +72,15 @@ export async function POST(req: Request): Promise<Response> {
         // ignore — original error is what we report
       }
     }
+    // Translate the most common dev-time misconfiguration into something the
+    // operator can actually act on. The raw "Inngest API Error: 401 Event key
+    // not found" only makes sense once you know that pnpm inngest:dev is the
+    // local broker and that the SDK falls back to Inngest Cloud without it.
+    const isInngestAuth =
+      /event key not found/i.test(raw) || /401/.test(raw);
+    const message = isInngestAuth
+      ? 'Inngest broker not reachable. In dev, start it with `pnpm inngest:dev` in another terminal. In prod, set INNGEST_EVENT_KEY.'
+      : raw;
     return Response.json(
       { error: 'internal', message },
       { status: 500 },

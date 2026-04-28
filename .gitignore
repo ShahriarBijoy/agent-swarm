@@ -1,6 +1,9 @@
 # Parallel phase worktrees — see gitworkflow.md
 .worktree/
 
+# Brainstorming visual companion — local-only mockups
+.superpowers/
+
 # Planning / implementation docs — kept private
 *.md
 !README.md
@@ -25,6 +28,11 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Local scratch — manual screenshots, design references, never shipped
+/progress-*.png
+/replay-*.png
+components/examples/
 
 # Next.js
 /.next/
