@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import type { InferSelectModel } from 'drizzle-orm';
-import { taskEvents } from '@/db/schema';
+import type { taskEvents } from '@/db/schema';
 import { AgentCanvas } from '@/components/dashboard/canvas/agent-canvas';
 import { CanvasScrubber } from '@/components/dashboard/canvas/canvas-scrubber';
 import type { TimelineEvent } from '@/components/timeline/types';

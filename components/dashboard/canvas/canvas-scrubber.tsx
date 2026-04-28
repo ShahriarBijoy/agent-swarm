@@ -1,6 +1,6 @@
 // components/dashboard/canvas/canvas-scrubber.tsx
 'use client';
-import { ChangeEvent } from 'react';
+import { type ChangeEvent, useEffect, useState } from 'react';
 
 export type ScrubEvent = { kind: 'tool' | 'gate'; t: Date };
 
@@ -15,7 +15,22 @@ export type CanvasScrubberProps = {
 
 export function CanvasScrubber({ startedAt, endedAt, events, cursor, onCursorChange }: CanvasScrubberProps) {
   const start = startedAt.getTime();
-  const end = (endedAt ?? new Date()).getTime();
+  // For terminated tasks `endedAt` is the source of truth and renders identically
+  // on server + client. For LIVE tasks we use the latest tick we know about for
+  // SSR (deterministic, server-derived from props) and switch to wall-clock once
+  // mounted — that's what fixes the React hydration mismatch warning that used
+  // to come from `new Date()` running twice with different values.
+  const lastTickMs = events.length ? events[events.length - 1]!.t.getTime() : start + 1;
+  const [nowMs, setNowMs] = useState<number>(endedAt ? endedAt.getTime() : lastTickMs);
+  useEffect(() => {
+    if (endedAt) return;
+    const tick = () => setNowMs(Date.now());
+    tick();
+    const id = window.setInterval(tick, 1000);
+    return () => window.clearInterval(id);
+  }, [endedAt]);
+
+  const end = endedAt ? endedAt.getTime() : nowMs;
   const span = Math.max(1, end - start);
 
   function handleSlide(e: ChangeEvent<HTMLInputElement>) {

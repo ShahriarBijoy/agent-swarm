@@ -2,7 +2,6 @@
 
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { Button } from '@/components/ui/button';
 
 export function CreateTaskForm() {
   const router = useRouter();
@@ -39,10 +38,11 @@ export function CreateTaskForm() {
     }
   }
 
+  const empty = !prompt.trim();
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3">
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">Prompt</span>
+        <span className="text-[13px] font-medium text-[var(--color-ink)]">Prompt</span>
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
@@ -50,20 +50,25 @@ export function CreateTaskForm() {
           maxLength={4000}
           disabled={submitting}
           placeholder="What should the fleet orchestrator do?"
-          className="rounded-md border border-input bg-background p-2 font-mono text-sm outline-none focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 disabled:opacity-60"
+          autoFocus
+          className="rounded-[10px] border border-[var(--color-line-strong)] bg-[var(--color-surface)] p-2.5 font-mono text-[13px] text-[var(--color-ink)] placeholder:text-[var(--color-muted-2)] outline-none focus:border-[var(--color-ink)] focus:ring-2 focus:ring-[var(--color-ink)]/10 disabled:opacity-60"
         />
-        <span className="text-xs text-muted-foreground">
+        <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-muted-2)]">
           {prompt.length} / 4000
         </span>
       </label>
       {error && (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">
+        <div role="alert" className="rounded-[8px] border border-[var(--color-red)]/40 bg-[rgba(215,25,33,0.06)] p-2.5 text-[12px] text-[var(--color-red)]">
           {error}
         </div>
       )}
-      <Button type="submit" disabled={submitting || !prompt.trim()}>
+      <button
+        type="submit"
+        disabled={submitting || empty}
+        className="rounded-full bg-[var(--color-ink)] px-4 py-2.5 text-[13px] font-medium text-[var(--color-surface)] transition-colors hover:bg-black disabled:cursor-not-allowed disabled:bg-[var(--color-muted-2)] disabled:text-white/70"
+      >
         {submitting ? 'Creating…' : 'Create task'}
-      </Button>
+      </button>
     </form>
   );
 }

@@ -1,3 +1,4 @@
+import { Handle, Position } from 'reactflow';
 import type { AgentNodeData } from './canvas-layout';
 
 const STATE_LABEL: Record<AgentNodeData['state'], string> = {
@@ -23,8 +24,16 @@ export function AgentNode({ data, compact }: { data: AgentNodeData; compact: boo
   const chips = compact ? data.toolNames.slice(0, 3) : data.toolNames;
 
   return (
-    <div className={`rounded-[10px] border ${borderClass} ${bgClass} ${textClass} ${compact ? 'w-[178px] p-2.5' : 'w-[240px] p-3.5'}`}>
-      <div className="mb-1 flex justify-between font-mono text-[8.5px] uppercase tracking-[0.2em] text-[var(--color-muted)]">
+    <div className={`relative rounded-[10px] border ${borderClass} ${bgClass} ${textClass} ${compact ? 'w-[178px] p-2.5' : 'w-[240px] p-3.5'}`}>
+      {/* Workers receive an edge from the dispatcher; dispatcher emits one to each worker. */}
+      {!isDispatcher && (
+        <Handle type="target" position={Position.Top} style={{ background: 'transparent', border: 'none', width: 1, height: 1 }} />
+      )}
+      {isDispatcher && (
+        <Handle type="source" position={Position.Bottom} style={{ background: 'transparent', border: 'none', width: 1, height: 1 }} />
+      )}
+
+      <div className={`mb-1 flex justify-between font-mono text-[8.5px] uppercase tracking-[0.2em] ${isDispatcher ? 'text-white/55' : 'text-[var(--color-muted)]'}`}>
         <span>{isDispatcher ? 'Dispatcher' : data.state === 'hitl' ? 'Worker · gated' : 'Worker'}</span>
         <span className={data.state === 'hitl' ? 'text-[var(--color-red)] font-semibold' : data.state === 'active' ? 'text-[var(--color-ink)] font-semibold' : ''}>
           {STATE_LABEL[data.state]}
@@ -34,7 +43,7 @@ export function AgentNode({ data, compact }: { data: AgentNodeData; compact: boo
       {chips.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {chips.map((c) => (
-            <span key={c} className="rounded-[3px] border border-[var(--color-line-strong)] px-1.5 py-0.5 font-mono text-[8.5px] uppercase tracking-[0.06em] text-[var(--color-muted)]">
+            <span key={c} className={`rounded-[3px] border px-1.5 py-0.5 font-mono text-[8.5px] uppercase tracking-[0.06em] ${isDispatcher ? 'border-white/20 text-white/65' : 'border-[var(--color-line-strong)] text-[var(--color-muted)]'}`}>
               {c}
             </span>
           ))}

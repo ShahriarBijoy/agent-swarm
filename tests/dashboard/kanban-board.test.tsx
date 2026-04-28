@@ -35,12 +35,18 @@ describe('<KanbanBoard />', () => {
     expect(getByText(/failed/i)).toBeTruthy();
   });
 
-  it('places a task with an open gate in the awaiting-approval column', () => {
+  it('renders a card for a task with an open gate', () => {
     const board = emptyBoard();
     board.awaiting_approval.push(
       fakeTask({ id: 'gate-1', prompt: 'Approve cost ceiling raise', hasOpenGate: true }),
     );
     const { getByText } = render(<KanbanBoard board={board} />);
     expect(getByText('Approve cost ceiling raise')).toBeTruthy();
+  });
+
+  it('shows the empty placeholder in columns with no tasks', () => {
+    const { getAllByText } = render(<KanbanBoard board={emptyBoard()} />);
+    // All five columns are empty — five "— empty —" placeholders.
+    expect(getAllByText(/—\s*empty\s*—/i)).toHaveLength(5);
   });
 });

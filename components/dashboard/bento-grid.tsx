@@ -1,5 +1,5 @@
 // components/dashboard/bento-grid.tsx
-import { ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 const TEMPLATE_AREAS = [
   '"greet greet workers workers workers"',
@@ -13,8 +13,9 @@ export function BentoGrid({ children }: { children: ReactNode }) {
     <div
       className="grid gap-[14px]"
       style={{
-        gridTemplateColumns: 'repeat(5, 1fr)',
+        gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
         gridTemplateAreas: TEMPLATE_AREAS,
+        gridAutoRows: 'minmax(220px, auto)',
       }}
     >
       {children}
