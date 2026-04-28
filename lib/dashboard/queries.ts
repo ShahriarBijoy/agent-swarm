@@ -138,6 +138,13 @@ export type ActiveWorkersSnapshot = {
   totalAgents: number;
 };
 
+/**
+ * "Active" means: the agent has emitted an event in the last 10 minutes
+ * inside a run that is still flagged in_progress. The freshness window
+ * guards against stale `in_progress` rows that leaked when a process
+ * crashed without marking its run done/failed — the status flag alone
+ * lies, so we cross-check with event recency.
+ */
 export async function getActiveWorkers(): Promise<ActiveWorkersSnapshot> {
   const rows = toRows<{ agent: string }>(
     await db.execute(sql`
@@ -145,6 +152,7 @@ export async function getActiveWorkers(): Promise<ActiveWorkersSnapshot> {
       FROM task_events e
       JOIN task_runs r ON r.id = e.run_id
       WHERE r.status = 'in_progress'
+        AND e.created_at >= now() - interval '10 minutes'
         AND payload->>'agent_name' IS NOT NULL
     `),
   );
@@ -155,26 +163,76 @@ export async function getActiveWorkers(): Promise<ActiveWorkersSnapshot> {
 
 export type ActiveRunSnapshot = {
   task: Pick<Task, 'id' | 'prompt' | 'createdAt'>;
-  run: Pick<TaskRun, 'id' | 'startedAt' | 'totalCostUsd' | 'totalInputTokens' | 'totalOutputTokens'>;
+  run: Pick<TaskRun, 'id' | 'startedAt' | 'totalCostUsd' | 'totalInputTokens' | 'totalOutputTokens'> & {
+    status: string;
+  };
   events: Pick<TaskEvent, 'id' | 'seq' | 'type' | 'payload' | 'createdAt'>[];
+  /**
+   * True when the run is genuinely live — `status = 'in_progress'` AND has
+   * had at least one event in the last 10 minutes. False when we fell back
+   * to the most recent run (any status) because nothing is currently
+   * running. The mini-canvas widget switches its "Active swarm run · LIVE"
+   * heading to "Last swarm run · {status}" when `isLive` is false.
+   */
+  isLive: boolean;
 };
 
+/**
+ * Pick the run to feature in the home dashboard's mini-canvas tile.
+ *
+ * Selection order:
+ *   1. A run that is BOTH `status='in_progress'` AND has had a task_event
+ *      in the last 10 minutes. This is the "truly live" definition — it
+ *      ignores stale rows that leaked as in_progress without ever being
+ *      closed.
+ *   2. Otherwise, the most recent run (any status), so the widget always
+ *      has something useful to show. `isLive` is false in this branch.
+ *
+ * Returns null only when the database has zero runs at all.
+ */
 export async function getActiveRun(): Promise<ActiveRunSnapshot | null> {
-  const runs = await db.execute(sql`
-    SELECT r.id AS run_id, r.task_id, r.started_at, r.total_cost_usd, r.total_input_tokens, r.total_output_tokens,
+  type Row = {
+    run_id: string; task_id: string; started_at: Date; total_cost_usd: string;
+    total_input_tokens: number; total_output_tokens: number;
+    prompt: string; task_created_at: Date; status: string;
+  };
+
+  const liveRows = await db.execute(sql`
+    SELECT r.id AS run_id, r.task_id, r.started_at,
+           r.total_cost_usd, r.total_input_tokens, r.total_output_tokens,
+           r.status::text AS status,
            t.prompt, t.created_at AS task_created_at
     FROM task_runs r
     JOIN tasks t ON t.id = r.task_id
     WHERE r.status = 'in_progress'
+      AND EXISTS (
+        SELECT 1 FROM task_events e
+        WHERE e.run_id = r.id
+          AND e.created_at >= now() - interval '10 minutes'
+      )
     ORDER BY r.started_at DESC
     LIMIT 1
   `);
-  type Row = {
-    run_id: string; task_id: string; started_at: Date; total_cost_usd: string;
-    total_input_tokens: number; total_output_tokens: number; prompt: string; task_created_at: Date;
-  };
-  const r = toRows<Row>(runs)[0];
-  if (!r) return null;
+
+  let row = toRows<Row>(liveRows)[0];
+  let isLive = true;
+
+  if (!row) {
+    const recentRows = await db.execute(sql`
+      SELECT r.id AS run_id, r.task_id, r.started_at,
+             r.total_cost_usd, r.total_input_tokens, r.total_output_tokens,
+             r.status::text AS status,
+             t.prompt, t.created_at AS task_created_at
+      FROM task_runs r
+      JOIN tasks t ON t.id = r.task_id
+      ORDER BY r.started_at DESC
+      LIMIT 1
+    `);
+    row = toRows<Row>(recentRows)[0];
+    isLive = false;
+  }
+
+  if (!row) return null;
 
   const events = await db.execute(sql`
     SELECT
@@ -184,20 +242,23 @@ export async function getActiveRun(): Promise<ActiveRunSnapshot | null> {
       payload     AS "payload",
       created_at  AS "createdAt"
     FROM task_events
-    WHERE run_id = ${r.run_id}
+    WHERE run_id = ${row.run_id}
     ORDER BY id ASC
     LIMIT 200
   `);
+
   return {
-    task: { id: r.task_id, prompt: r.prompt, createdAt: r.task_created_at },
+    task: { id: row.task_id, prompt: row.prompt, createdAt: row.task_created_at },
     run: {
-      id: r.run_id,
-      startedAt: r.started_at,
-      totalCostUsd: r.total_cost_usd as unknown as TaskRun['totalCostUsd'],
-      totalInputTokens: r.total_input_tokens,
-      totalOutputTokens: r.total_output_tokens,
+      id: row.run_id,
+      startedAt: row.started_at,
+      totalCostUsd: row.total_cost_usd as unknown as TaskRun['totalCostUsd'],
+      totalInputTokens: row.total_input_tokens,
+      totalOutputTokens: row.total_output_tokens,
+      status: row.status,
     },
     events: toRows<Pick<TaskEvent, 'id' | 'seq' | 'type' | 'payload' | 'createdAt'>>(events),
+    isLive,
   };
 }
 
@@ -392,6 +453,72 @@ export async function getKanbanBoard(): Promise<Record<KanbanColumn, TaskWithGat
   return board;
 }
 
+export type AgentSummary = {
+  name: string;
+  lastActivatedAt: Date | null;
+  totalRuns30d: number;
+  totalCost30d: number;
+  successRate30d: number | null;
+};
+
+/**
+ * Per-agent rollup over the last 30 days for the /agents index. Single query,
+ * one row per agent — agents with no activity are absent from the result and
+ * the page fills them in with zero/null defaults so every registered worker
+ * still renders. `lastActivatedAt` is the most recent task_event timestamp
+ * tagged with that agent name.
+ */
+export async function getAgentsSummary(): Promise<Record<string, AgentSummary>> {
+  const rows = toRows<{
+    agent: string;
+    last_active: Date | string | null;
+    total_runs: number;
+    total_cost: number;
+    success_count: number;
+  }>(
+    await db.execute(sql`
+      WITH agent_runs AS (
+        SELECT
+          e.payload->>'agent_name' AS agent,
+          r.id AS run_id,
+          r.status::text AS status,
+          coalesce(r.total_cost_usd, 0)::float AS cost,
+          max(e.created_at) AS last_event_at
+        FROM task_events e
+        JOIN task_runs r ON r.id = e.run_id
+        WHERE e.payload->>'agent_name' IS NOT NULL
+          AND e.created_at >= now() - interval '30 days'
+        GROUP BY agent, r.id, r.status, r.total_cost_usd
+      )
+      SELECT
+        agent,
+        max(last_event_at)                                     AS last_active,
+        count(*)::int                                          AS total_runs,
+        coalesce(sum(cost), 0)::float                          AS total_cost,
+        sum(case when status = 'done' then 1 else 0 end)::int  AS success_count
+      FROM agent_runs
+      GROUP BY agent
+    `),
+  );
+  const out: Record<string, AgentSummary> = {};
+  for (const r of rows) {
+    const totalRuns = Number(r.total_runs ?? 0);
+    out[r.agent] = {
+      name: r.agent,
+      lastActivatedAt:
+        r.last_active == null
+          ? null
+          : r.last_active instanceof Date
+            ? r.last_active
+            : new Date(r.last_active),
+      totalRuns30d: totalRuns,
+      totalCost30d: Number(r.total_cost ?? 0),
+      successRate30d: totalRuns > 0 ? Number(r.success_count ?? 0) / totalRuns : null,
+    };
+  }
+  return out;
+}
+
 export type AgentMetrics = {
   p50LatencyMs: number;
   p95LatencyMs: number;
@@ -525,7 +652,7 @@ export async function getMemories(
     LEFT JOIN LATERAL (
       SELECT action FROM memory_cleanup_proposals
       WHERE memory_id = m.id ORDER BY id DESC LIMIT 1
-    ) p ON ${filter.cleanupTouched ? sql`true` : sql`false`}
+    ) p ON true
     WHERE
       ${filter.bucket ? sql`m.bucket = ${filter.bucket}` : sql`true`}
       AND ${filter.segment ? sql`m.segment::text = ${filter.segment}` : sql`true`}
