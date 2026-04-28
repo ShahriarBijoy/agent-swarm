@@ -29,6 +29,11 @@ Thumbs.db
 .vscode/
 *.swp
 
+# Local scratch — manual screenshots, design references, never shipped
+/progress-*.png
+/replay-*.png
+components/examples/
+
 # Next.js
 /.next/
 /out/

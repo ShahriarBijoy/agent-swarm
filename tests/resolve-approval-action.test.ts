@@ -71,7 +71,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
   it('approves: updates gate, appends resolved event, sends Inngest event', async () => {
     const { gateId, taskId, runId } = await seedPendingGate();
 
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     const result = await resolveApproval(
       makeForm({ gateId, decision: 'approve' }),
     );
@@ -116,7 +116,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
     const { gateId } = await seedPendingGate();
     const modifiedInput = { command: 'rm -rf /tmp/safe_only' };
 
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     const result = await resolveApproval(
       makeForm({
         gateId,
@@ -147,7 +147,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
   it('denies: persists reviewer note, Inngest payload approved=false', async () => {
     const { gateId } = await seedPendingGate();
 
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     const result = await resolveApproval(
       makeForm({ gateId, decision: 'deny', reason: 'too risky' }),
     );
@@ -166,7 +166,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
   });
 
   it('rejects invalid body (missing gateId)', async () => {
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     const result = await resolveApproval(makeForm({ decision: 'approve' }));
     expect(result.ok).toBe(false);
     if (!result.ok && result.error === 'invalid_body') {
@@ -180,7 +180,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
 
   it('rejects modify without modifiedInput', async () => {
     const { gateId } = await seedPendingGate();
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     const result = await resolveApproval(
       makeForm({ gateId, decision: 'modify' }),
     );
@@ -192,7 +192,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
 
   it('rejects modify with malformed JSON', async () => {
     const { gateId } = await seedPendingGate();
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     const result = await resolveApproval(
       makeForm({
         gateId,
@@ -207,7 +207,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
   });
 
   it('rejects unknown gate id', async () => {
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     const result = await resolveApproval(
       makeForm({
         gateId: '00000000-0000-4000-8000-000000000000',
@@ -222,7 +222,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
 
   it('rejects already-resolved gate (no double-decide)', async () => {
     const { gateId } = await seedPendingGate();
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     await resolveApproval(makeForm({ gateId, decision: 'approve' }));
     const second = await resolveApproval(
       makeForm({ gateId, decision: 'deny', reason: 'changed mind' }),
@@ -240,7 +240,7 @@ skipSuite('phase-07 resolveApproval Server Action', () => {
     const { inngest } = await import('@/lib/inngest/client');
     vi.mocked(inngest.send).mockRejectedValueOnce(new Error('broker-down'));
 
-    const { resolveApproval } = await import('@/app/tasks/[id]/actions');
+    const { resolveApproval } = await import('@/app/(dashboard)/tasks/[id]/actions');
     const result = await resolveApproval(
       makeForm({ gateId, decision: 'approve' }),
     );

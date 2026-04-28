@@ -1,0 +1,698 @@
+// lib/dashboard/queries.ts
+import { db } from '@/db/client';
+import { sql } from 'drizzle-orm';
+import type { InferSelectModel } from 'drizzle-orm';
+import { tasks, taskRuns, taskEvents, approvalGates } from '@/db/schema';
+
+type Task = InferSelectModel<typeof tasks>;
+type TaskRun = InferSelectModel<typeof taskRuns>;
+type TaskEvent = InferSelectModel<typeof taskEvents>;
+type ApprovalGate = InferSelectModel<typeof approvalGates>;
+
+// drizzle-orm/neon-http's db.execute() returns `{ rows: [...] }` (FullQueryResults),
+// not a bare array. Other queries in this repo (see db/queries/task-runtime.ts)
+// guard with `Array.isArray(result) ? result : (result.rows ?? [])`. Mirror that
+// here so the plan's `(... as unknown as Foo[]).map(...)` pattern still works.
+function toRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === 'object' && 'rows' in result) {
+    const rows = (result as { rows?: unknown }).rows;
+    if (Array.isArray(rows)) return rows as T[];
+  }
+  return [];
+}
+
+export type GreetingSnapshot = {
+  months: { label: string; count: number }[];
+  totalThisMonth: number;
+  totalLastMonth: number;
+  monthCostUsd: number;
+};
+
+export async function getGreetingSnapshot(): Promise<GreetingSnapshot> {
+  const rows = toRows<{ label: string; count: number }>(
+    await db.execute(sql`
+      WITH months AS (
+        SELECT generate_series(
+          date_trunc('month', now()) - interval '5 months',
+          date_trunc('month', now()),
+          interval '1 month'
+        ) AS m
+      )
+      SELECT
+        to_char(m, 'mon') AS label,
+        (SELECT count(*)::int FROM tasks
+          WHERE created_at >= m AND created_at < m + interval '1 month') AS count
+      FROM months
+      ORDER BY m ASC
+    `),
+  );
+  const months = rows.map((r) => ({
+    label: r.label.toLowerCase(),
+    count: Number(r.count ?? 0),
+  }));
+  const totalThisMonth = months[5]?.count ?? 0;
+  const totalLastMonth = months[4]?.count ?? 0;
+
+  const cost = toRows<{ c: number }>(
+    await db.execute(sql`
+      SELECT coalesce(sum(total_cost_usd), 0)::float AS c
+      FROM task_runs
+      WHERE started_at >= date_trunc('month', now())
+    `),
+  );
+  const monthCostUsd = Number(cost[0]?.c ?? 0);
+
+  return { months, totalThisMonth, totalLastMonth, monthCostUsd };
+}
+
+export type AllAgentsSnapshot = {
+  avgCostPerTask: number;
+  perAgentCost: { agent: string; cost: number }[];
+  avgP95LatencyMs: number;
+  perAgentP95: { agent: string; ms: number }[];
+};
+
+export async function getAllAgentsSnapshot(): Promise<AllAgentsSnapshot> {
+  const costRows = toRows<{ agent: string; cost: number }>(
+    await db.execute(sql`
+      SELECT
+        payload->>'agent_name' AS agent,
+        coalesce(sum((payload->'usage'->>'total_cost_usd')::float), 0) AS cost
+      FROM task_events
+      WHERE created_at >= now() - interval '30 days'
+        AND payload->>'agent_name' IS NOT NULL
+      GROUP BY agent
+      ORDER BY cost DESC
+    `),
+  );
+  const perAgentCost = costRows.map((r) => ({
+    agent: r.agent,
+    cost: Number(r.cost),
+  }));
+
+  const totalCost = toRows<{ c: number }>(
+    await db.execute(sql`
+      SELECT coalesce(avg(total_cost_usd), 0)::float AS c
+      FROM task_runs
+      WHERE started_at >= now() - interval '30 days'
+    `),
+  );
+  const avgCostPerTask = Number(totalCost[0]?.c ?? 0);
+
+  // p95 latency per agent — derived from consecutive task_events deltas inside a run
+  const latencyRows = toRows<{ agent: string; p95_ms: number }>(
+    await db.execute(sql`
+      WITH ev AS (
+        SELECT
+          run_id,
+          payload->>'agent_name' AS agent,
+          created_at,
+          lag(created_at) OVER (PARTITION BY run_id ORDER BY id) AS prev_at
+        FROM task_events
+        WHERE payload->>'agent_name' IS NOT NULL
+          AND created_at >= now() - interval '30 days'
+      )
+      SELECT
+        agent,
+        percentile_cont(0.95) WITHIN GROUP (
+          ORDER BY EXTRACT(EPOCH FROM (created_at - prev_at)) * 1000
+        ) AS p95_ms
+      FROM ev
+      WHERE prev_at IS NOT NULL
+      GROUP BY agent
+      ORDER BY p95_ms DESC NULLS LAST
+    `),
+  );
+  const perAgentP95 = latencyRows.map((r) => ({ agent: r.agent, ms: Number(r.p95_ms ?? 0) }));
+
+  const avgP95LatencyMs = perAgentP95.length
+    ? perAgentP95.reduce((s, r) => s + r.ms, 0) / perAgentP95.length
+    : 0;
+
+  return { avgCostPerTask, perAgentCost, avgP95LatencyMs, perAgentP95 };
+}
+
+export type ActiveWorkersSnapshot = {
+  activeAgentNames: string[];
+  totalAgents: number;
+};
+
+/**
+ * "Active" means: the agent has emitted an event in the last 10 minutes
+ * inside a run that is still flagged in_progress. The freshness window
+ * guards against stale `in_progress` rows that leaked when a process
+ * crashed without marking its run done/failed — the status flag alone
+ * lies, so we cross-check with event recency.
+ */
+export async function getActiveWorkers(): Promise<ActiveWorkersSnapshot> {
+  const rows = toRows<{ agent: string }>(
+    await db.execute(sql`
+      SELECT DISTINCT payload->>'agent_name' AS agent
+      FROM task_events e
+      JOIN task_runs r ON r.id = e.run_id
+      WHERE r.status = 'in_progress'
+        AND e.created_at >= now() - interval '10 minutes'
+        AND payload->>'agent_name' IS NOT NULL
+    `),
+  );
+  const activeAgentNames = rows.map((r) => r.agent).filter(Boolean);
+
+  return { activeAgentNames, totalAgents: 11 };
+}
+
+export type ActiveRunSnapshot = {
+  task: Pick<Task, 'id' | 'prompt' | 'createdAt'>;
+  run: Pick<TaskRun, 'id' | 'startedAt' | 'totalCostUsd' | 'totalInputTokens' | 'totalOutputTokens'> & {
+    status: string;
+  };
+  events: Pick<TaskEvent, 'id' | 'seq' | 'type' | 'payload' | 'createdAt'>[];
+  /**
+   * True when the run is genuinely live — `status = 'in_progress'` AND has
+   * had at least one event in the last 10 minutes. False when we fell back
+   * to the most recent run (any status) because nothing is currently
+   * running. The mini-canvas widget switches its "Active swarm run · LIVE"
+   * heading to "Last swarm run · {status}" when `isLive` is false.
+   */
+  isLive: boolean;
+};
+
+/**
+ * Pick the run to feature in the home dashboard's mini-canvas tile.
+ *
+ * Selection order:
+ *   1. A run that is BOTH `status='in_progress'` AND has had a task_event
+ *      in the last 10 minutes. This is the "truly live" definition — it
+ *      ignores stale rows that leaked as in_progress without ever being
+ *      closed.
+ *   2. Otherwise, the most recent run (any status), so the widget always
+ *      has something useful to show. `isLive` is false in this branch.
+ *
+ * Returns null only when the database has zero runs at all.
+ */
+export async function getActiveRun(): Promise<ActiveRunSnapshot | null> {
+  type Row = {
+    run_id: string; task_id: string; started_at: Date; total_cost_usd: string;
+    total_input_tokens: number; total_output_tokens: number;
+    prompt: string; task_created_at: Date; status: string;
+  };
+
+  const liveRows = await db.execute(sql`
+    SELECT r.id AS run_id, r.task_id, r.started_at,
+           r.total_cost_usd, r.total_input_tokens, r.total_output_tokens,
+           r.status::text AS status,
+           t.prompt, t.created_at AS task_created_at
+    FROM task_runs r
+    JOIN tasks t ON t.id = r.task_id
+    WHERE r.status = 'in_progress'
+      AND EXISTS (
+        SELECT 1 FROM task_events e
+        WHERE e.run_id = r.id
+          AND e.created_at >= now() - interval '10 minutes'
+      )
+    ORDER BY r.started_at DESC
+    LIMIT 1
+  `);
+
+  let row = toRows<Row>(liveRows)[0];
+  let isLive = true;
+
+  if (!row) {
+    const recentRows = await db.execute(sql`
+      SELECT r.id AS run_id, r.task_id, r.started_at,
+             r.total_cost_usd, r.total_input_tokens, r.total_output_tokens,
+             r.status::text AS status,
+             t.prompt, t.created_at AS task_created_at
+      FROM task_runs r
+      JOIN tasks t ON t.id = r.task_id
+      ORDER BY r.started_at DESC
+      LIMIT 1
+    `);
+    row = toRows<Row>(recentRows)[0];
+    isLive = false;
+  }
+
+  if (!row) return null;
+
+  const events = await db.execute(sql`
+    SELECT
+      id          AS "id",
+      seq         AS "seq",
+      type        AS "type",
+      payload     AS "payload",
+      created_at  AS "createdAt"
+    FROM task_events
+    WHERE run_id = ${row.run_id}
+    ORDER BY id ASC
+    LIMIT 200
+  `);
+
+  return {
+    task: { id: row.task_id, prompt: row.prompt, createdAt: row.task_created_at },
+    run: {
+      id: row.run_id,
+      startedAt: row.started_at,
+      totalCostUsd: row.total_cost_usd as unknown as TaskRun['totalCostUsd'],
+      totalInputTokens: row.total_input_tokens,
+      totalOutputTokens: row.total_output_tokens,
+      status: row.status,
+    },
+    events: toRows<Pick<TaskEvent, 'id' | 'seq' | 'type' | 'payload' | 'createdAt'>>(events),
+    isLive,
+  };
+}
+
+export type OpenGate = ApprovalGate & { taskPrompt: string };
+
+export async function getOpenApprovalGates(): Promise<OpenGate[]> {
+  const rows = await db.execute(sql`
+    SELECT
+      g.id                AS "id",
+      g.run_id            AS "runId",
+      g.task_id           AS "taskId",
+      g.tool_name         AS "toolName",
+      g.proposed_input    AS "proposedInput",
+      g.status            AS "status",
+      g.resolution_input  AS "resolutionInput",
+      g.reviewer_note     AS "reviewerNote",
+      g.reviewer_id       AS "reviewerId",
+      g.inngest_event_key AS "inngestEventKey",
+      g.created_at        AS "createdAt",
+      g.resolved_at       AS "resolvedAt",
+      g.timed_out_at      AS "timedOutAt",
+      t.prompt            AS "taskPrompt"
+    FROM approval_gates g
+    JOIN tasks t ON t.id = g.task_id
+    WHERE g.status = 'pending'
+    ORDER BY g.created_at ASC
+    LIMIT 20
+  `);
+  return toRows<OpenGate>(rows);
+}
+
+export type MemoryWritesTodaySnapshot = {
+  count: number;
+  deltaVsYesterday: number;
+};
+
+export async function getMemoryWritesToday(): Promise<MemoryWritesTodaySnapshot> {
+  const r = await db.execute(sql`
+    SELECT
+      (SELECT count(*)::int FROM memories
+        WHERE created_at >= date_trunc('day', now())) AS today,
+      (SELECT count(*)::int FROM memories
+        WHERE created_at >= date_trunc('day', now()) - interval '1 day'
+          AND created_at <  date_trunc('day', now())) AS yesterday
+  `);
+  const row = toRows<{ today: number; yesterday: number }>(r)[0];
+  return {
+    count: Number(row?.today ?? 0),
+    deltaVsYesterday: Number(row?.today ?? 0) - Number(row?.yesterday ?? 0),
+  };
+}
+
+export type LastCleanupSnapshot = {
+  runStartedAt: Date;
+  promoted: number;
+  pruned: number;
+  contested: number;
+} | null;
+
+export async function getLastCleanup(): Promise<LastCleanupSnapshot> {
+  const rows = await db.execute(sql`
+    SELECT r.id, r.started_at,
+      coalesce(sum(case when p.action = 'promote' then 1 else 0 end), 0)::int AS promoted,
+      coalesce(sum(case when p.action = 'prune'   then 1 else 0 end), 0)::int AS pruned,
+      r.proposals_contested AS contested
+    FROM memory_cleanup_runs r
+    LEFT JOIN memory_cleanup_proposals p ON p.run_id = r.id
+    WHERE r.status = 'completed'
+    GROUP BY r.id
+    ORDER BY r.started_at DESC
+    LIMIT 1
+  `);
+  type Row = { id: string; started_at: Date | string; promoted: number; pruned: number; contested: number };
+  const r = toRows<Row>(rows)[0];
+  if (!r) return null;
+  return {
+    runStartedAt: r.started_at instanceof Date ? r.started_at : new Date(r.started_at),
+    promoted: Number(r.promoted),
+    pruned: Number(r.pruned),
+    contested: Number(r.contested),
+  };
+}
+
+export type CostLineSnapshot = {
+  days: { date: Date; total: number; opusOnly: number }[];
+};
+
+export async function getCostLine12Mo(): Promise<CostLineSnapshot> {
+  const rows = await db.execute(sql`
+    SELECT
+      date_trunc('day', started_at) AS d,
+      coalesce(sum(total_cost_usd), 0)::float AS total,
+      0::float AS opus_only
+    FROM task_runs
+    WHERE started_at >= now() - interval '365 days'
+    GROUP BY d
+    ORDER BY d ASC
+  `);
+  // opus_only is a placeholder — wire from task_events.payload->>'model' filter in a follow-up
+  // when payload reliably carries the model field on every event.
+  type Row = { d: Date | string; total: number; opus_only: number };
+  return {
+    days: toRows<Row>(rows).map((r) => ({
+      date: r.d instanceof Date ? r.d : new Date(r.d),
+      total: Number(r.total),
+      opusOnly: Number(r.opus_only),
+    })),
+  };
+}
+
+export type SegmentSnapshot = {
+  segments: { id: string; count: number; avgImportance: number }[];
+};
+
+export async function getMemorySegmentsSnapshot(): Promise<SegmentSnapshot> {
+  const rows = await db.execute(sql`
+    SELECT segment::text AS id,
+           count(*)::int AS count,
+           coalesce(avg(importance), 0)::float AS avg_importance
+    FROM memories
+    GROUP BY segment
+    ORDER BY avg_importance DESC NULLS LAST
+  `);
+  type Row = { id: string; count: number; avg_importance: number };
+  return {
+    segments: toRows<Row>(rows).map((r) => ({
+      id: r.id,
+      count: Number(r.count),
+      avgImportance: Number(r.avg_importance),
+    })),
+  };
+}
+
+export type KanbanColumn = 'queued' | 'in_progress' | 'awaiting_approval' | 'done' | 'failed';
+
+export function deriveKanbanColumn(
+  status: 'queued' | 'in_progress' | 'awaiting_approval' | 'done' | 'failed' | 'cancelled',
+  gateOpen: boolean,
+): KanbanColumn {
+  if (status === 'in_progress' && gateOpen) return 'awaiting_approval';
+  if (status === 'cancelled') return 'failed';
+  return status as KanbanColumn;
+}
+
+export type TaskWithGate = {
+  id: string;
+  prompt: string;
+  status: string;
+  createdAt: Date;
+  agentCount: number;
+  costUsd: number;
+  hasOpenGate: boolean;
+};
+
+export async function getKanbanBoard(): Promise<Record<KanbanColumn, TaskWithGate[]>> {
+  const rows = await db.execute(sql`
+    SELECT t.id, t.prompt, t.status::text AS status, t.created_at,
+      coalesce((
+        SELECT count(DISTINCT payload->>'agent_name')
+        FROM task_events
+        WHERE task_events.task_id = t.id AND payload->>'agent_name' IS NOT NULL
+      ), 0)::int AS agent_count,
+      coalesce((
+        SELECT max(total_cost_usd) FROM task_runs WHERE task_id = t.id
+      ), 0)::float AS cost_usd,
+      EXISTS(
+        SELECT 1 FROM approval_gates g WHERE g.task_id = t.id AND g.status = 'pending'
+      ) AS has_open_gate
+    FROM tasks t
+    ORDER BY t.created_at DESC
+    LIMIT 200
+  `);
+  type Row = {
+    id: string; prompt: string; status: string; created_at: Date | string;
+    agent_count: number; cost_usd: number; has_open_gate: boolean;
+  };
+  const board: Record<KanbanColumn, TaskWithGate[]> = {
+    queued: [], in_progress: [], awaiting_approval: [], done: [], failed: [],
+  };
+  for (const r of toRows<Row>(rows)) {
+    const col = deriveKanbanColumn(r.status as never, Boolean(r.has_open_gate));
+    board[col].push({
+      id: r.id,
+      prompt: r.prompt,
+      status: r.status,
+      createdAt: r.created_at instanceof Date ? r.created_at : new Date(r.created_at),
+      agentCount: Number(r.agent_count),
+      costUsd: Number(r.cost_usd),
+      hasOpenGate: Boolean(r.has_open_gate),
+    });
+  }
+  return board;
+}
+
+export type AgentSummary = {
+  name: string;
+  lastActivatedAt: Date | null;
+  totalRuns30d: number;
+  totalCost30d: number;
+  successRate30d: number | null;
+};
+
+/**
+ * Per-agent rollup over the last 30 days for the /agents index. Single query,
+ * one row per agent — agents with no activity are absent from the result and
+ * the page fills them in with zero/null defaults so every registered worker
+ * still renders. `lastActivatedAt` is the most recent task_event timestamp
+ * tagged with that agent name.
+ */
+export async function getAgentsSummary(): Promise<Record<string, AgentSummary>> {
+  const rows = toRows<{
+    agent: string;
+    last_active: Date | string | null;
+    total_runs: number;
+    total_cost: number;
+    success_count: number;
+  }>(
+    await db.execute(sql`
+      WITH agent_runs AS (
+        SELECT
+          e.payload->>'agent_name' AS agent,
+          r.id AS run_id,
+          r.status::text AS status,
+          coalesce(r.total_cost_usd, 0)::float AS cost,
+          max(e.created_at) AS last_event_at
+        FROM task_events e
+        JOIN task_runs r ON r.id = e.run_id
+        WHERE e.payload->>'agent_name' IS NOT NULL
+          AND e.created_at >= now() - interval '30 days'
+        GROUP BY agent, r.id, r.status, r.total_cost_usd
+      )
+      SELECT
+        agent,
+        max(last_event_at)                                     AS last_active,
+        count(*)::int                                          AS total_runs,
+        coalesce(sum(cost), 0)::float                          AS total_cost,
+        sum(case when status = 'done' then 1 else 0 end)::int  AS success_count
+      FROM agent_runs
+      GROUP BY agent
+    `),
+  );
+  const out: Record<string, AgentSummary> = {};
+  for (const r of rows) {
+    const totalRuns = Number(r.total_runs ?? 0);
+    out[r.agent] = {
+      name: r.agent,
+      lastActivatedAt:
+        r.last_active == null
+          ? null
+          : r.last_active instanceof Date
+            ? r.last_active
+            : new Date(r.last_active),
+      totalRuns30d: totalRuns,
+      totalCost30d: Number(r.total_cost ?? 0),
+      successRate30d: totalRuns > 0 ? Number(r.success_count ?? 0) / totalRuns : null,
+    };
+  }
+  return out;
+}
+
+export type AgentMetrics = {
+  p50LatencyMs: number;
+  p95LatencyMs: number;
+  dailyTokens: { date: Date; tokens: number }[];
+  successRate: number;
+  recentRuns: { runId: string; taskId: string; startedAt: Date; status: string; costUsd: number }[];
+  topMemories: { memoryId: string; recallCount: number; excerpt: string }[];
+};
+
+export async function getAgentMetrics(name: string): Promise<AgentMetrics> {
+  const lat = await db.execute(sql`
+    WITH ev AS (
+      SELECT created_at,
+             lag(created_at) OVER (PARTITION BY run_id ORDER BY id) AS prev_at
+      FROM task_events
+      WHERE payload->>'agent_name' = ${name}
+        AND created_at >= now() - interval '30 days'
+    )
+    SELECT
+      percentile_cont(0.50) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (created_at - prev_at)) * 1000) AS p50,
+      percentile_cont(0.95) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM (created_at - prev_at)) * 1000) AS p95
+    FROM ev
+    WHERE prev_at IS NOT NULL
+  `);
+  const lr = toRows<{ p50: number; p95: number }>(lat)[0];
+
+  const tokens = await db.execute(sql`
+    SELECT date_trunc('day', created_at) AS d,
+           coalesce(sum((payload->'usage'->>'input_tokens')::int + (payload->'usage'->>'output_tokens')::int), 0)::int AS t
+    FROM task_events
+    WHERE payload->>'agent_name' = ${name} AND created_at >= now() - interval '30 days'
+    GROUP BY d ORDER BY d ASC
+  `);
+
+  const success = await db.execute(sql`
+    SELECT
+      coalesce(sum(case when r.status='done' then 1 else 0 end)::float, 0) /
+      nullif(count(*), 0) AS rate
+    FROM task_runs r
+    WHERE EXISTS (
+      SELECT 1 FROM task_events e
+      WHERE e.run_id = r.id AND payload->>'agent_name' = ${name}
+    ) AND r.started_at >= now() - interval '30 days'
+  `);
+
+  const recent = await db.execute(sql`
+    SELECT r.id AS run_id, r.task_id, r.started_at, r.status::text AS status, r.total_cost_usd::float AS cost_usd
+    FROM task_runs r
+    WHERE EXISTS (
+      SELECT 1 FROM task_events e WHERE e.run_id = r.id AND payload->>'agent_name' = ${name}
+    )
+    ORDER BY r.started_at DESC LIMIT 50
+  `);
+
+  // FIXME(phase-10/task-28): always returns [] — `tool_name` lives on `tool_call` events,
+  // not `tool_result`, and recall results are stringified JSON inside `content[].text`,
+  // not a structured `tool_result.memories` JSONB sub-object. Task 28 must either rewrite
+  // this (join tool_call+tool_result, parse text blobs) or render "(data not yet captured)".
+  const top = await db.execute(sql`
+    WITH recalls AS (
+      SELECT jsonb_array_elements(payload->'tool_result'->'memories') AS m
+      FROM task_events
+      WHERE payload->>'agent_name' = ${name}
+        AND payload->>'tool_name' = 'mcp__memory__recall'
+        AND created_at >= now() - interval '30 days'
+    )
+    SELECT m->>'id' AS memory_id, count(*)::int AS recall_count, max(m->>'content') AS excerpt
+    FROM recalls WHERE m->>'id' IS NOT NULL
+    GROUP BY memory_id ORDER BY recall_count DESC LIMIT 10
+  `);
+
+  return {
+    p50LatencyMs: Number(lr?.p50 ?? 0),
+    p95LatencyMs: Number(lr?.p95 ?? 0),
+    dailyTokens: toRows<{ d: Date | string; t: number }>(tokens).map((r) => ({
+      date: r.d instanceof Date ? r.d : new Date(r.d),
+      tokens: Number(r.t),
+    })),
+    successRate: Number(toRows<{ rate: number }>(success)[0]?.rate ?? 0),
+    recentRuns: toRows<{ run_id: string; task_id: string; started_at: Date | string; status: string; cost_usd: number }>(recent).map((r) => ({
+      runId: r.run_id,
+      taskId: r.task_id,
+      startedAt: r.started_at instanceof Date ? r.started_at : new Date(r.started_at),
+      status: r.status,
+      costUsd: Number(r.cost_usd),
+    })),
+    topMemories: toRows<{ memory_id: string; recall_count: number; excerpt: string }>(top).map((r) => ({
+      memoryId: r.memory_id,
+      recallCount: Number(r.recall_count),
+      excerpt: r.excerpt ?? '',
+    })),
+  };
+}
+
+export type MemoriesFilter = {
+  bucket?: 'short' | 'long' | 'permanent' | null;
+  segment?: string | null;
+  cleanupTouched?: boolean;
+};
+
+export type MemoriesPage = {
+  rows: {
+    id: string;
+    content: string;
+    bucket: string;
+    segment: string;
+    importance: number;
+    lastRecallAt: Date | null;
+    accessCount: number;
+    cleanupVerdict: string | null;
+  }[];
+  total: number;
+};
+
+export async function getMemories(
+  filter: MemoriesFilter,
+  page: number,
+  pageSize: number = 100,
+): Promise<MemoriesPage> {
+  const rows = await db.execute(sql`
+    SELECT
+      m.id                            AS "id",
+      substr(m.content, 1, 240)       AS "content",
+      m.bucket::text                  AS "bucket",
+      m.segment::text                 AS "segment",
+      m.importance::float             AS "importance",
+      m.last_accessed_at              AS "lastRecallAt",
+      m.access_count                  AS "accessCount",
+      p.action                        AS "cleanupVerdict"
+    FROM memories m
+    LEFT JOIN LATERAL (
+      SELECT action FROM memory_cleanup_proposals
+      WHERE memory_id = m.id ORDER BY id DESC LIMIT 1
+    ) p ON true
+    WHERE
+      ${filter.bucket ? sql`m.bucket = ${filter.bucket}` : sql`true`}
+      AND ${filter.segment ? sql`m.segment::text = ${filter.segment}` : sql`true`}
+      AND ${filter.cleanupTouched ? sql`p.action IS NOT NULL` : sql`true`}
+    ORDER BY m.created_at DESC, m.id DESC
+    OFFSET ${page * pageSize} LIMIT ${pageSize}
+  `);
+  type Row = {
+    id: string;
+    content: string;
+    bucket: string;
+    segment: string;
+    importance: number;
+    lastRecallAt: Date | string | null;
+    accessCount: number;
+    cleanupVerdict: string | null;
+  };
+  const tot = await db.execute(sql`
+    SELECT count(*)::int AS total FROM memories m
+    WHERE
+      ${filter.bucket ? sql`m.bucket = ${filter.bucket}` : sql`true`}
+      AND ${filter.segment ? sql`m.segment::text = ${filter.segment}` : sql`true`}
+      AND ${filter.cleanupTouched ? sql`EXISTS (SELECT 1 FROM memory_cleanup_proposals p WHERE p.memory_id = m.id)` : sql`true`}
+  `);
+  return {
+    rows: toRows<Row>(rows).map((r) => ({
+      id: r.id,
+      content: r.content,
+      bucket: r.bucket,
+      segment: r.segment,
+      importance: Number(r.importance),
+      lastRecallAt:
+        r.lastRecallAt == null
+          ? null
+          : r.lastRecallAt instanceof Date
+            ? r.lastRecallAt
+            : new Date(r.lastRecallAt),
+      accessCount: Number(r.accessCount),
+      cleanupVerdict: r.cleanupVerdict,
+    })),
+    total: Number(toRows<{ total: number }>(tot)[0]?.total ?? 0),
+  };
+}

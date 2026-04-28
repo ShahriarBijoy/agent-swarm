@@ -30,8 +30,8 @@ export function RunResult({
           <span
             className={`rounded px-2 py-0.5 font-mono text-xs uppercase tracking-wide ${
               isSuccess
-                ? 'bg-primary/20 text-primary'
-                : 'bg-destructive/20 text-destructive'
+                ? 'bg-[var(--color-ink)] text-[var(--color-lime)]'
+                : 'bg-destructive text-white'
             }`}
           >
             {subtype}
