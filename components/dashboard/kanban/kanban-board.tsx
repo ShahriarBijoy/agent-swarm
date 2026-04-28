@@ -49,8 +49,7 @@ export function KanbanBoard({ board }: { board: Record<Col, TaskWithGate[]> }) {
             <KanbanColumn
               key={col}
               value={col}
-              disabled
-              className="flex h-[calc(100vh-200px)] min-h-[420px] flex-col rounded-[16px] border border-[var(--color-line)] bg-[var(--color-surface-warm)] p-4"
+              className="flex h-[calc(100vh-200px)] min-h-[420px] flex-col overflow-hidden rounded-[16px] border border-[var(--color-line)] bg-[var(--color-surface-warm)] p-4"
             >
               <div className="mb-3 flex items-center justify-between font-mono text-[9.5px] uppercase tracking-[0.22em] text-[var(--color-muted-2)]">
                 <span className="flex items-center gap-2">
@@ -59,7 +58,7 @@ export function KanbanBoard({ board }: { board: Record<Col, TaskWithGate[]> }) {
                 </span>
                 <span>{tasks.length}</span>
               </div>
-              <ScrollArea className="-mx-1 flex-1 px-1">
+              <ScrollArea className="-mx-1 min-h-0 flex-1 px-1">
                 <KanbanColumnContent value={col} className="flex flex-col gap-2.5 py-1">
                   {tasks.map((t) => (
                     <KanbanItem key={t.id} value={t.id} asChild>

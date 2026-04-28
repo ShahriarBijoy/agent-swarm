@@ -33,6 +33,7 @@ function hrefFor(id: WidgetId, data: unknown): string | undefined {
   }
 }
 
+
 export default async function HomePage() {
   // initial server-side render: load each widget's data once
   const initial = await Promise.all(
@@ -44,6 +45,7 @@ export default async function HomePage() {
       {initial.map(({ id, data }) => {
         const def = WIDGET_REGISTRY[id];
         const Comp = def.Component;
+        const FooterComp = def.Footer;
         return (
           <BentoCell
             key={id}
@@ -51,6 +53,8 @@ export default async function HomePage() {
             gridArea={def.gridArea}
             variant={variantFor(id)}
             openHref={hrefFor(id, data)}
+            footer={FooterComp ? <FooterComp data={data as never} /> : undefined}
+            panelClassName={def.panelClassName}
           >
             <Comp data={data as never} />
           </BentoCell>

@@ -1,6 +1,10 @@
 'use client';
 
 import { useState, useTransition } from 'react';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { ClockIcon } from 'lucide-react';
 import type { GateSummary } from '@/db/queries/approval-gates';
 import { resolveApproval } from './actions';
 
@@ -9,6 +13,9 @@ import { resolveApproval } from './actions';
  * Action (`resolveApproval`); the clicked button's `value` populates the
  * `decision` form field. "Modify" reveals a JSON textarea whose contents
  * are validated client-side before the form submits.
+ *
+ * Styled with the shadcn `Alert` shell (the same primitive ai-elements
+ * `Confirmation` builds on) plus the codebase's button.
  */
 export function ApprovalCard({ gate }: { gate: GateSummary }) {
   const [reason, setReason] = useState('');
@@ -26,7 +33,6 @@ export function ApprovalCard({ gate }: { gate: GateSummary }) {
     if (reason.trim()) fd.set('reason', reason.trim());
     if (decision === 'modify') {
       try {
-        // Reject + warn before round-tripping to the server.
         JSON.parse(modifiedInput);
       } catch (err) {
         setErrorMsg(
@@ -42,101 +48,107 @@ export function ApprovalCard({ gate }: { gate: GateSummary }) {
       if (!result.ok) {
         setErrorMsg(formatError(result));
       }
-      // On ok: the SSE stream's `approval_request:resolved` event drops
-      // this card from the bar via revalidatePath + the parent's effect.
     });
   }
 
   return (
-    <article
+    <Alert
       data-testid="approval-card"
       data-gate-id={gate.id}
-      className="flex flex-col gap-3 rounded-md border border-amber-500/50 bg-amber-500/5 p-4"
+      className="flex flex-col gap-3 border-amber-500/50 bg-amber-50/60"
     >
-      <header className="flex items-baseline justify-between text-sm">
-        <span className="font-mono text-amber-700 dark:text-amber-300">
-          <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-semibold uppercase tracking-wide">
-            awaiting approval
-          </span>{' '}
-          <span className="text-foreground">{gate.toolName}</span>
+      <AlertTitle className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-2">
+          <Badge
+            variant="secondary"
+            className="gap-1.5 rounded-full bg-amber-500/15 text-amber-800"
+          >
+            <ClockIcon className="size-3.5" />
+            Awaiting approval
+          </Badge>
+          <span className="font-mono text-sm text-foreground">
+            {gate.toolName}
+          </span>
         </span>
         <span className="font-mono text-xs text-muted-foreground">
           {gate.id.slice(0, 8)}
         </span>
-      </header>
+      </AlertTitle>
 
-      <details className="text-xs">
-        <summary className="cursor-pointer select-none text-muted-foreground">
-          proposed input
-        </summary>
-        <pre className="mt-1 whitespace-pre-wrap rounded bg-muted p-2 font-mono">
-          {JSON.stringify(gate.proposedInput, null, 2)}
-        </pre>
-      </details>
+      <AlertDescription className="flex flex-col gap-3">
+        <details className="text-xs">
+          <summary className="cursor-pointer select-none text-muted-foreground">
+            proposed input
+          </summary>
+          <pre className="mt-1 whitespace-pre-wrap rounded bg-muted p-2 font-mono">
+            {JSON.stringify(gate.proposedInput, null, 2)}
+          </pre>
+        </details>
 
-      <label className="flex flex-col gap-1 text-xs">
-        <span className="text-muted-foreground">reason (optional)</span>
-        <textarea
-          value={reason}
-          onChange={(e) => setReason(e.target.value)}
-          rows={2}
-          className="rounded border border-input bg-background px-2 py-1 font-mono"
-          placeholder="why approve / modify / deny?"
-        />
-      </label>
-
-      {showModify && (
         <label className="flex flex-col gap-1 text-xs">
-          <span className="text-muted-foreground">modified input (JSON)</span>
+          <span className="text-muted-foreground">reason (optional)</span>
           <textarea
-            value={modifiedInput}
-            onChange={(e) => setModifiedInput(e.target.value)}
-            rows={6}
-            className="rounded border border-input bg-background px-2 py-1 font-mono"
-            spellCheck={false}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            rows={2}
+            className="rounded border border-input bg-background px-2 py-1 font-mono text-foreground"
+            placeholder="why approve / modify / deny?"
           />
         </label>
-      )}
 
-      {errorMsg && (
-        <p
-          role="alert"
-          className="text-xs text-rose-600 dark:text-rose-400"
-        >
-          {errorMsg}
-        </p>
-      )}
+        {showModify && (
+          <label className="flex flex-col gap-1 text-xs">
+            <span className="text-muted-foreground">modified input (JSON)</span>
+            <textarea
+              value={modifiedInput}
+              onChange={(e) => setModifiedInput(e.target.value)}
+              rows={6}
+              className="rounded border border-input bg-background px-2 py-1 font-mono text-foreground"
+              spellCheck={false}
+            />
+          </label>
+        )}
 
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => handleSubmit('approve')}
-          className="rounded bg-emerald-600 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
-        >
-          Approve
-        </button>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => {
-            if (showModify) handleSubmit('modify');
-            else setShowModify(true);
-          }}
-          className="rounded bg-sky-600 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
-        >
-          {showModify ? 'Submit modified' : 'Modify…'}
-        </button>
-        <button
-          type="button"
-          disabled={pending}
-          onClick={() => handleSubmit('deny')}
-          className="rounded bg-rose-600 px-3 py-1 text-sm font-medium text-white disabled:opacity-50"
-        >
-          Deny
-        </button>
-      </div>
-    </article>
+        {errorMsg && (
+          <p role="alert" className="text-xs text-destructive">
+            {errorMsg}
+          </p>
+        )}
+
+        <div className="flex flex-wrap gap-2 self-end">
+          <Button
+            type="button"
+            size="sm"
+            disabled={pending}
+            onClick={() => handleSubmit('approve')}
+            className="bg-emerald-600 text-white hover:bg-emerald-700"
+          >
+            Approve
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            disabled={pending}
+            onClick={() => {
+              if (showModify) handleSubmit('modify');
+              else setShowModify(true);
+            }}
+          >
+            {showModify ? 'Submit modified' : 'Modify…'}
+          </Button>
+          <Button
+            type="button"
+            size="sm"
+            variant="destructive"
+            disabled={pending}
+            onClick={() => handleSubmit('deny')}
+          >
+            Deny
+          </Button>
+        </div>
+      </AlertDescription>
+    </Alert>
   );
 }
 

@@ -48,16 +48,60 @@ const DISPATCHER = 'dispatcher';
  * Pure function: derive the canvas layout from an events list.
  * Always-deterministic given the same input — used by both live and replay.
  *
+ * The structure (which workers exist, their order, edges) comes from the
+ * **full** events list so the node set is stable across cursor changes —
+ * scrubbing/replaying changes only state, not topology. State (active /
+ * hitl / done / chips) is computed from events `<= asOfMs`.
+ *
+ * Without this split, every cursor advance during replay added/removed
+ * worker nodes, which made React Flow drop the edge between dispatcher
+ * and worker until live mode resumed (it can't draw edges while a node's
+ * lifecycle is racing the next render).
+ *
  * @param events     ordered task_events (ASC by id)
- * @param asOfMs     optional epoch ms cutoff; events.created_at > asOfMs are ignored
+ * @param asOfMs     optional epoch ms cutoff; events.created_at > asOfMs are ignored for STATE only
  */
 export function layoutCanvas(events: TaskEvent[], asOfMs?: number): CanvasLayout {
+  // ---- Pass 1: discover workers from the full events list (stable structure) ----
+  const workers = new Map<string, AgentNodeData>();
+
+  function ensureWorker(name: string, at: Date) {
+    const existing = workers.get(name);
+    if (existing) {
+      if (!existing.firstDelegatedAt || at < existing.firstDelegatedAt) {
+        existing.firstDelegatedAt = at;
+      }
+      return existing;
+    }
+    const fresh: AgentNodeData = {
+      agentName: name,
+      state: 'queued',
+      toolNames: [],
+      firstDelegatedAt: at,
+    };
+    workers.set(name, fresh);
+    return fresh;
+  }
+
+  for (const e of events) {
+    const name = (e.payload as { agent_name?: string })?.agent_name;
+    if (name && name !== DISPATCHER) {
+      ensureWorker(name, e.createdAt);
+    }
+    if (
+      name === DISPATCHER &&
+      e.type === 'tool_call' &&
+      (e.payload as { tool_name?: string }).tool_name === 'Agent'
+    ) {
+      const targetName = (e.payload as { tool_input?: { subagent_type?: string } })
+        .tool_input?.subagent_type;
+      if (targetName) ensureWorker(targetName, e.createdAt);
+    }
+  }
+
+  // ---- Pass 2: apply state changes from events visible at the cursor ----
   const filtered = asOfMs == null ? events : events.filter((e) => e.createdAt.getTime() <= asOfMs);
 
-  const workers = new Map<string, AgentNodeData>();
-  const dispatcherTools = new Set<string>();
-
-  // 1) Pass: collect agent activity
   let dispatcherLastEventAt: Date | undefined;
   for (const e of filtered) {
     const name = (e.payload as { agent_name?: string })?.agent_name;
@@ -65,36 +109,11 @@ export function layoutCanvas(events: TaskEvent[], asOfMs?: number): CanvasLayout
 
     if (name === DISPATCHER) {
       dispatcherLastEventAt = e.createdAt;
-      // Agent tool calls = delegations
-      if (
-        e.type === 'tool_call' &&
-        (e.payload as { tool_name?: string }).tool_name === 'Agent'
-      ) {
-        const targetName =
-          (e.payload as { tool_input?: { subagent_type?: string } }).tool_input?.subagent_type;
-        if (!targetName) continue;
-        const existing = workers.get(targetName);
-        if (!existing) {
-          workers.set(targetName, {
-            agentName: targetName,
-            state: 'queued',
-            toolNames: [],
-            firstDelegatedAt: e.createdAt,
-            lastEventAt: e.createdAt,
-          });
-        }
-      }
       continue;
     }
 
-    // Worker activity
-    const data: AgentNodeData = workers.get(name) ?? {
-      agentName: name,
-      state: 'queued',
-      toolNames: [],
-      firstDelegatedAt: e.createdAt,
-      lastEventAt: e.createdAt,
-    };
+    const data = workers.get(name);
+    if (!data) continue;
     data.lastEventAt = e.createdAt;
 
     if (e.type === 'tool_call') {
@@ -111,18 +130,15 @@ export function layoutCanvas(events: TaskEvent[], asOfMs?: number): CanvasLayout
     } else if (e.type === 'run_result') {
       data.state = (e.payload as { status?: string }).status === 'failed' ? 'failed' : 'done';
     }
-
-    workers.set(name, data);
   }
 
-  // 2) The most-recently-active worker (and not hitl) gets state='active';
-  //    others previously in active drop back to 'queued' (their tools are done for now).
+  // ---- Pass 3: most-recently-active gets `active`; older actives drop to `queued` ----
   const sorted = [...workers.values()].sort((a, b) =>
     (a.firstDelegatedAt?.getTime() ?? 0) - (b.firstDelegatedAt?.getTime() ?? 0));
   let mostRecent: AgentNodeData | undefined;
   for (const w of sorted) {
     if (w.state !== 'hitl' && w.state !== 'failed' && w.state !== 'done') {
-      if (!mostRecent || (w.lastEventAt!.getTime() > mostRecent.lastEventAt!.getTime())) {
+      if (!mostRecent || (w.lastEventAt?.getTime() ?? 0) > (mostRecent.lastEventAt?.getTime() ?? 0)) {
         mostRecent = w;
       }
     }
@@ -131,7 +147,7 @@ export function layoutCanvas(events: TaskEvent[], asOfMs?: number): CanvasLayout
     if (w.state === 'active' && w !== mostRecent) w.state = 'queued';
   }
 
-  // 3) Build node layout — dispatcher top center, workers in a row below
+  // ---- Pass 4: build node layout — dispatcher top center, workers in a row below ----
   const nodes: CanvasNode[] = [];
   nodes.push({
     id: DISPATCHER,
@@ -139,7 +155,7 @@ export function layoutCanvas(events: TaskEvent[], asOfMs?: number): CanvasLayout
     data: {
       agentName: DISPATCHER,
       state: 'active',
-      toolNames: [...dispatcherTools],
+      toolNames: [],
       lastEventAt: dispatcherLastEventAt,
     },
   });
@@ -156,7 +172,7 @@ export function layoutCanvas(events: TaskEvent[], asOfMs?: number): CanvasLayout
     });
   });
 
-  // 4) Edges — dispatcher → worker for each worker, reason is unused for now
+  // ---- Pass 5: edges — dispatcher → worker for each known worker ----
   const edges: CanvasEdge[] = sorted.map((w) => ({
     id: `${DISPATCHER}->${w.agentName}`,
     source: DISPATCHER,

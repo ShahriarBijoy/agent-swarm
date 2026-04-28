@@ -10,6 +10,12 @@ import {
   listPendingForTask,
   type GateSummary,
 } from '@/db/queries/approval-gates';
+import {
+  Frame,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from '@/components/reui/frame';
 import type {
   TerminalSummary,
   TimelineEvent,
@@ -17,6 +23,7 @@ import type {
 } from '@/components/timeline/types';
 import { ApprovalBar } from './approval-bar';
 import { CanvasView } from './canvas-view';
+import { TaskTabs, type TaskView } from './task-tabs';
 import { TimelineStream } from './timeline-stream';
 
 export const dynamic = 'force-dynamic';
@@ -66,7 +73,7 @@ export default async function TaskPage({
 }) {
   const { id } = await params;
   const { view: viewParam } = await searchParams;
-  const view = viewParam === 'stream' ? 'stream' : 'canvas';
+  const view: TaskView = viewParam === 'stream' ? 'stream' : 'canvas';
   const task = await getTaskById(id);
   if (!task) notFound();
 
@@ -88,7 +95,7 @@ export default async function TaskPage({
       : null;
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
+    <main className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
       <nav className="text-xs">
         <Link
           href="/tasks"
@@ -98,59 +105,50 @@ export default async function TaskPage({
         </Link>
       </nav>
 
-      <header className="flex flex-col gap-2">
-        <div className="flex items-baseline justify-between gap-4">
-          <h1 className="font-heading text-lg font-medium">Task</h1>
+      <Frame
+        variant="ghost"
+        spacing="sm"
+        className="bg-[var(--color-bg-2)]/55"
+      >
+        <FrameHeader className="flex-row items-center justify-between">
+          <FrameTitle className="font-mono text-[9.5px] font-medium uppercase tracking-[0.22em] text-[var(--color-muted-2)]">
+            Task
+          </FrameTitle>
           <span
             data-status={task.status}
-            className="rounded bg-muted px-2 py-0.5 font-mono text-xs uppercase tracking-wide"
+            className="rounded-full bg-[var(--color-ink)] px-3 py-1 font-mono text-[10px] font-bold uppercase tracking-[0.2em] text-[var(--color-surface)]"
           >
             {task.status}
           </span>
-        </div>
-        <p className="text-sm whitespace-pre-wrap">{task.prompt}</p>
-        <p className="font-mono text-xs text-muted-foreground">{task.id}</p>
-      </header>
+        </FrameHeader>
+        <FramePanel className="flex flex-col gap-4 bg-[var(--color-surface-warm)] border-[var(--color-line)]">
+          <header className="flex flex-col gap-2">
+            <p className="text-sm whitespace-pre-wrap">{task.prompt}</p>
+            <p className="font-mono text-xs text-muted-foreground">{task.id}</p>
+          </header>
 
-      <ApprovalBar taskId={task.id} initialGates={initialGates} />
+          <ApprovalBar taskId={task.id} initialGates={initialGates} />
 
-      <div className="mb-3 flex gap-2">
-        <Link
-          href={`?view=canvas`}
-          className={`rounded-full px-3 py-1.5 text-[12px] ${
-            view === 'canvas'
-              ? 'bg-[var(--color-ink)] text-[var(--color-surface)]'
-              : 'border border-[var(--color-line-strong)]'
-          }`}
-        >
-          Canvas
-        </Link>
-        <Link
-          href={`?view=stream`}
-          className={`rounded-full px-3 py-1.5 text-[12px] ${
-            view === 'stream'
-              ? 'bg-[var(--color-ink)] text-[var(--color-surface)]'
-              : 'border border-[var(--color-line-strong)]'
-          }`}
-        >
-          Stream
-        </Link>
-      </div>
-
-      {view === 'canvas' ? (
-        <CanvasView
-          initialEvents={initialEvents}
-          startedAt={startedAt}
-          endedAt={endedAt}
-          taskId={task.id}
-        />
-      ) : (
-        <TimelineStream
-          taskId={task.id}
-          initialEvents={initialEvents}
-          initialTerminal={initialTerminal}
-        />
-      )}
+          <TaskTabs
+            initialView={view}
+            canvasSlot={
+              <CanvasView
+                initialEvents={initialEvents}
+                startedAt={startedAt}
+                endedAt={endedAt}
+                taskId={task.id}
+              />
+            }
+            streamSlot={
+              <TimelineStream
+                taskId={task.id}
+                initialEvents={initialEvents}
+                initialTerminal={initialTerminal}
+              />
+            }
+          />
+        </FramePanel>
+      </Frame>
     </main>
   );
 }

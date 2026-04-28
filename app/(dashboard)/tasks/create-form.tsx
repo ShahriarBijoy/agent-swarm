@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from 'react';
 import { useRouter } from 'next/navigation';
 
-export function CreateTaskForm() {
+export function CreateTaskForm({ onCreated }: { onCreated?: () => void } = {}) {
   const router = useRouter();
   const [prompt, setPrompt] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -31,6 +31,7 @@ export function CreateTaskForm() {
         );
       }
       const { taskId } = (await res.json()) as { taskId: string };
+      onCreated?.();
       router.push(`/tasks/${taskId}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));

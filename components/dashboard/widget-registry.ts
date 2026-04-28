@@ -31,8 +31,22 @@ export type WidgetDef<TData = unknown> = {
   refreshMs: number;
   /** Server-callable loader — returns the data the widget renders. */
   load: () => Promise<TData>;
-  /** Render component receiving the loaded data. */
+  /** Render component receiving the loaded data — fills the FramePanel. */
   Component: ComponentType<{ data: TData }>;
+  /**
+   * Optional summary row rendered inside the BentoCell's <FrameFooter>
+   * beneath the panel. Use this for widgets whose content is a "main
+   * visual + small key/value pair" (e.g. cost-line-12mo's avg-daily and
+   * days-tracked stats sit naturally in the footer slot).
+   */
+  Footer?: ComponentType<{ data: TData }>;
+  /**
+   * Extra Tailwind classes merged onto the BentoCell's inner FramePanel.
+   * Use sparingly — the most common case is `'overflow-visible'` for
+   * widgets whose hover layer (Recharts tooltips, dropdowns) needs to
+   * render past the panel's default rounded clip.
+   */
+  panelClassName?: string;
 };
 
 export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {

@@ -103,6 +103,16 @@ function CanvasInner({ events, mode, asOf }: AgentCanvasProps) {
   const nodeTypes = useMemo(() => NODE_TYPES, []);
   const edgeTypes = useMemo(() => EDGE_TYPES, []);
 
+  // Explicit width/height lets React Flow skip its async measurement cycle.
+  // Without these, fresh node-object references on every cursor frame keep the
+  // node "unmeasured" and the dispatcher→worker edge fails to route during
+  // replay (only re-appears once cursor returns to live and the prop churn
+  // stops). Heights are approximations — exact value isn't important; presence
+  // of any number is what unblocks edge routing.
+  const NODE_W = mode === 'mini' ? 178 : 240;
+  const NODE_H_DISPATCHER = mode === 'mini' ? 56 : 72;
+  const NODE_H_WORKER = mode === 'mini' ? 80 : 110;
+
   const rfNodes = useMemo(
     () =>
       nodes.map((n) => ({
@@ -112,8 +122,10 @@ function CanvasInner({ events, mode, asOf }: AgentCanvasProps) {
         data: { ...n.data, compact: mode === 'mini', linkable: mode === 'full' },
         draggable: mode === 'full',
         selectable: mode === 'full',
+        width: NODE_W,
+        height: n.id === 'dispatcher' ? NODE_H_DISPATCHER : NODE_H_WORKER,
       })),
-    [nodes, mode],
+    [nodes, mode, NODE_W, NODE_H_DISPATCHER, NODE_H_WORKER],
   );
   const rfEdges = useMemo(
     () =>
@@ -177,9 +189,15 @@ function CanvasInner({ events, mode, asOf }: AgentCanvasProps) {
 }
 
 export function AgentCanvas(props: AgentCanvasProps) {
+  // mini mode: fill remaining height of the parent flex column (the
+  // mini-canvas widget renders <div class="flex h-full flex-col">). A
+  // generous min-height keeps the canvas usable even when the row is
+  // unusually short during layout reflow.
+  // full mode: fixed 540px on the dedicated /tasks/[id] view.
+  const sizing = props.mode === 'mini' ? 'min-h-[280px] flex-1' : 'h-[540px]';
   return (
     <div
-      className={`relative ${props.mode === 'mini' ? 'h-[280px]' : 'h-[540px]'} w-full overflow-hidden rounded-[12px] border border-[var(--color-line)]`}
+      className={`relative ${sizing} w-full overflow-hidden rounded-[12px] border border-[var(--color-line)]`}
     >
       <ReactFlowProvider>
         <CanvasInner {...props} />

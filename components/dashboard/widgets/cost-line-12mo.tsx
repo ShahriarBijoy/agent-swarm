@@ -5,7 +5,7 @@
 import type { CostLineSnapshot } from '@/lib/dashboard/queries';
 import type { WidgetDef } from '../widget-registry';
 import { getCostLine12Mo } from '@/lib/dashboard/queries';
-import { CostLine12Mo } from './cost-line-12mo-view';
+import { CostLine12Mo, CostLine12MoFooter } from './cost-line-12mo-view';
 
 export { CostLine12Mo };
 
@@ -16,4 +16,10 @@ export const costLine12MoDef: WidgetDef<CostLineSnapshot> = {
   refreshMs: 30000,
   load: getCostLine12Mo,
   Component: CostLine12Mo,
+  Footer: CostLine12MoFooter,
+  // Recharts tooltips render absolutely-positioned inside the chart wrapper.
+  // The Frame primitive clips them by default — opt this cell out so the
+  // tooltip can extend past the panel's right edge near the latest data
+  // point. Combined with allowEscapeViewBox in the chart config.
+  panelClassName: 'overflow-visible',
 };

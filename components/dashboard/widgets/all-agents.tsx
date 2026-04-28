@@ -2,13 +2,15 @@
 import type { AllAgentsSnapshot } from '@/lib/dashboard/queries';
 import type { WidgetDef } from '../widget-registry';
 import { getAllAgentsSnapshot } from '@/lib/dashboard/queries';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 
 function StatBlock({
-  cap, num, suffix, delta, perAgent, barTag,
+  cap, num, suffix, delta, perAgent, barTag, formatValue,
 }: {
   cap: string; num: string; suffix?: string; delta: string;
   perAgent: { agent: string; value: number }[];
   barTag: string;
+  formatValue: (v: number) => string;
 }) {
   const max = Math.max(...perAgent.map((r) => r.value), 1);
   return (
@@ -26,7 +28,21 @@ function StatBlock({
             const h = `${(r.value / max) * 100}%`;
             const tone = i === 0 ? 'bg-[var(--color-lime)]' : (i === 1 ? 'bg-[var(--color-ink)]' : 'bg-black/10');
             return (
-              <div key={r.agent} data-bar={barTag} title={r.agent} className={`rounded-sm ${tone}`} style={{ height: h }} />
+              <Tooltip key={r.agent}>
+                <TooltipTrigger asChild>
+                  <div
+                    data-bar={barTag}
+                    className={`rounded-sm ${tone}`}
+                    style={{ height: h }}
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top" sideOffset={4}>
+                  <span className="font-medium">{r.agent}</span>
+                  <span className="font-mono tabular-nums opacity-75">
+                    {formatValue(r.value)}
+                  </span>
+                </TooltipContent>
+              </Tooltip>
             );
           })}
         </div>
@@ -48,6 +64,7 @@ export function AllAgents({ data }: { data: AllAgentsSnapshot }) {
         delta={`${data.perAgentCost.length} agents tracked`}
         perAgent={data.perAgentCost.map((r) => ({ agent: r.agent, value: r.cost }))}
         barTag="agent-cost"
+        formatValue={(v) => `$${v.toFixed(2)}`}
       />
       <StatBlock
         cap="Avg p95 latency"
@@ -56,6 +73,7 @@ export function AllAgents({ data }: { data: AllAgentsSnapshot }) {
         delta={data.perAgentP95[0] ? `${data.perAgentP95[0].agent} slowest` : 'no data'}
         perAgent={data.perAgentP95.map((r) => ({ agent: r.agent, value: r.ms }))}
         barTag="agent-p95"
+        formatValue={(v) => v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${Math.round(v)}ms`}
       />
     </div>
   );
