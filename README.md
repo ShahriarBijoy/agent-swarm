@@ -228,6 +228,36 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
     - Idempotency: cron skips silently if a `completed` run exists for today; manual events always proceed.
     - Cost figures are notional under Max OAuth (same caveat as phase 08).
 
+12. **Phase 10 — operator dashboard.** A read-only window onto everything phases 02–09 produce: a light-mode bento home, a full agent canvas, a kanban over `tasks × open-gate`, per-agent metric pages, and a filterable memory browser. The dashboard speaks to Postgres only — no dashboard file imports the Agent SDK (an invariant test enforces it).
+
+    ```bash
+    # Single terminal — no Inngest required to look around
+    pnpm dev -p 3100
+    ```
+
+    Then in the browser:
+
+    | Route | What you see |
+    |---|---|
+    | `/` | Bento home — 9 widgets: greeting, all-agents stats, mini-canvas of the active run, HITL queue, today's memory writes, last-night cleanup, 12-month cost line, memory-segments ring, active workers |
+    | `/tasks` | 5-column kanban: `queued / in_progress / awaiting_approval / done / failed` (the awaiting column is derived from `status='in_progress' ∧ open gate`) |
+    | `/tasks/<uuid>?view=canvas\|stream` | Same task, two views — Canvas is React Flow over the org chart; Stream is the phase-06/07 SSE timeline |
+    | `/agents/<name>` | Per-agent page — p50/p95 latency, daily-token bar chart (shadcn/ui chart over Recharts), success rate, recent runs, top-recalled memories. `<name>` must match a worker registered in `lib/agent/agents/` (the dispatcher is not a worker). |
+    | `/memories` | Filterable table — bucket × segment pills + a "touched by last cleanup" toggle; filters live in the URL so the browser back button works |
+
+    **Architecture notes**
+    - Each home widget is a `WidgetDef` with `{ id, name, gridArea, refreshMs, load, Component }`. Server-rendered once on first paint, then the client polls `/api/dashboard?widget=<id>` on the widget's `refreshMs` cadence (`useDashboardPoll` pauses on `document.hidden` and dedups in-flight requests).
+    - The active-run mini-canvas and the 12-month cost line are split across two files each: a `<name>.tsx` server module that owns the `WidgetDef` and a `<name>-view.tsx` client module that owns the JSX. This keeps the registry's `load` function a real server function across the React Server Component boundary instead of a serialized client reference.
+    - `tests/dashboard/invariants.test.ts` enforces three guardrails: the dashboard tree never imports `@anthropic-ai/claude-agent-sdk`, every `WidgetId` has a registered `{ load, Component, gridArea }`, and home widgets never import `recharts` directly (they must dynamic-import it so the home bundle stays under budget).
+
+    **End-to-end check**
+
+    ```bash
+    pnpm test:e2e
+    ```
+
+    Playwright spawns the dev server via the `webServer` config and visits the four routes plus a 404 sanity check.
+
 ## Scripts
 
 | Script | Purpose |
@@ -236,6 +266,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm inngest:dev` | Inngest CLI dev server on port 8288 — durable workflow broker for phase 07 HITL (run alongside `pnpm dev`) |
 | `pnpm build` / `pnpm start` | Production build / server |
 | `pnpm test` / `pnpm test:watch` | vitest |
+| `pnpm test:e2e` | Playwright E2E across the phase-10 dashboard routes (spawns its own dev server on 3100) |
 | `pnpm typecheck` | `tsc --noEmit` under strict |
 | `pnpm lint` / `pnpm format` | ESLint / Prettier |
 | `pnpm db:generate` | Generate a Drizzle migration |
