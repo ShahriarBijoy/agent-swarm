@@ -4202,6 +4202,100 @@ Plan complete and saved to `docs/superpowers/plans/2026-04-27-phase-10-dashboard
 
 Which approach?
 
+---
+
+## Final shipped state — deviations from plan
+
+The 30-task plan above shipped intact (every task closed). What changed in the **finishing pass** between the original close-out commit (`65fc4a9` — first pass at the README) and the PR-ready state:
+
+### Component vendor strategy (NEW — not in the original plan)
+
+The plan assumed plain Tailwind + a few `next/dynamic` Recharts imports. In the finishing pass we adopted a registry-based component vendor strategy via `components.json`:
+
+```json
+"registries": {
+  "@reui":         "https://reui.io/r/{style}/{name}.json",
+  "@ai-elements":  "https://ai-sdk.dev/elements/api/registry/{name}.json"
+}
+```
+
+| Folder | Origin | Why it's there |
+|---|---|---|
+| `components/ui/*` | shadcn `radix-maia` | Stock primitives — Dialog, Tabs, Table, Select, Avatar, Badge, Tooltip, Popover, etc. Used by every other folder. |
+| `components/reui/*` | reui | `<Frame>` shell (bento + dialog frame), `<DataGrid>` over @tanstack/react-table, `<Filters>` chip-bar, `<Kanban>`, `<Timeline>`, `<DateSelector>`. Anchors the visual language. |
+| `components/ai-elements/*` | Vercel AI SDK Elements | Tool / Reasoning / Confirmation / Code-Block / Conversation / Message / Shimmer. Used to re-skin the timeline — `ToolCall.tsx`, `ToolResult.tsx`, `AssistantTurn.tsx`, `ApprovalRequest.tsx` were rewritten on top of these. |
+
+These are **vendored** — fully copied into `components/{ui,reui,ai-elements}/` and treated as our code. Two patches applied during install (kept here as a record so they don't surprise the next reader):
+
+- `components/reui/filters.tsx:51` — the upstream import `Plus01Icon` from `@hugeicons/core-free-icons` resolves at the type level but is missing from the ESM bundle. Aliased to `PlusSignIcon as Plus01Icon`.
+- `components/reui/data-grid/data-grid-pagination.tsx:165` — `<SelectTrigger className="w-14">` clipped two-digit "Rows per page" values (10 / 25 / 50 / 100). Bumped to `w-20`.
+
+### Page surface — what shipped vs what the plan said
+
+| Route | Plan said | Shipped |
+|---|---|---|
+| `/` | Bento home, 9 widgets | Same shape, but `BentoCell` now wraps each widget in a reui `<Frame>` ↦ `<FramePanel>` (+ optional `<FrameFooter>` for widgets like cost-line whose summary stats sit naturally below the chart). `WidgetDef` gained `Footer?` and `panelClassName?`. |
+| `/tasks` | Kanban + a `<CreateTaskForm>` rendered in the page header | Same kanban, but the header now mounts `<CreateTaskDialog>` — a `+ New task` button that opens the form in a Radix Dialog. `create-form.tsx` got an `onCreated?` callback so the dialog can self-close on success. |
+| `/tasks/<id>?view=` | Plain anchor pills wired to `?view=` | Replaced with Radix `<Tabs>` in `task-tabs.tsx`. `value` is mirrored to the query param via `router.replace(..., { scroll: false })`; Radix unmounts inactive panes by default so only one EventSource is alive at a time. |
+| `/agents` (index) | Plain anchor list grid | Rebuilt as `agents-table.tsx` — a Frame-wrapped `<Table>` with a worker avatar (initials + earth-tone hash colour from `components/dashboard/agents/agent-avatar.tsx`), status badge (active / recent / idle by `lastActivatedAt`), soft budget, last-activated. Click row opens a Dialog with a 30-day stat block (runs, total cost, success rate as a coloured bar) and a **View full metrics →** link. Backed by a new `getAgentsSummary()` query. |
+| `/agents/<name>` | Per-agent metrics page | Unchanged from the plan. |
+| `/memories` | Filterable table — bucket × segment pills + "touched by last cleanup" toggle, URL-driven | Rebuilt as `memories-table.tsx` (client component) — `c-filters-7`-style chip filters over bucket / segment / cleanup-verdict, a sortable @tanstack/react-table `<DataGrid>` with pagination, importance as a coloured progress bar, cleanup verdict as a `promote / prune / merge / keep` colour-coded badge. Click row opens a Dialog with the full record. URL is no longer the source of truth — the server fetches up to 1000 rows once and the table filters / sorts / paginates client-side. The cleanup verdict column is always populated thanks to a small SQL fix below. |
+
+### Query-side fixes (NEW)
+
+`lib/dashboard/queries.ts` got three meaningful changes during the finishing pass:
+
+- **`getActiveWorkers`** — added `AND e.created_at >= now() - interval '10 minutes'`. The bare `r.status = 'in_progress'` filter was returning agents from runs that crashed without closing, leaking stale "active" workers into the home tile. The freshness window cross-checks the status flag against event recency.
+- **`getActiveRun`** — same fix, but with a fallback: if no run is genuinely live (in-progress AND has an event in the last 10 min), return the **most recent run of any status** with `isLive: false`. The mini-canvas tile flips its heading from "Active swarm run · LIVE" to "Last swarm run · {status}" so the home page always has something useful to show even on a quiet system.
+- **`getMemories`** — the `LEFT JOIN LATERAL ... ON ${cleanupTouched ? true : false}` pattern meant `cleanupVerdict` was always NULL whenever the cleanup-touched filter was off. Changed to `ON true` unconditionally so the verdict column is always populated (the WHERE clause still narrows when `cleanupTouched=true`). Lets the new client-side filter work without re-fetching.
+
+### Canvas — replay UX rework
+
+The original plan had a passive scrubber: drag the slider, the canvas redraws. Two issues showed up under load:
+
+1. **Topology stutter.** `canvas-layout.ts` was a single pass over the cursor-filtered events, so each tick added or removed worker nodes that hadn't started yet. React Flow dropped the dispatcher → worker edge until the next paint.
+2. **Bar lag during replay.** Driving the cursor 60×/s through React state forced React Flow to re-render every frame; the scrubber bar would tick in chunks instead of sliding smoothly.
+
+Fixes:
+
+- **Two-pass `canvas-layout.ts`.** Pass 1 derives **structure** (workers + delegation edges) from the **full** events list — topology is stable across cursor changes. Pass 2 applies **state** (active / hitl / done / tool chips) from events `<= asOfMs`.
+- **Play/Pause + imperative bar.** `<CanvasScrubber>` gained a Play/Pause button (Lucide icons). Pressing play kicks an 8-second `requestAnimationFrame` loop. The bar's fill is driven imperatively via `transform: scaleX()` + a CSS transition so the visual motion runs on the compositor and survives the React Flow re-render cost.
+
+### Timeline polish
+
+`components/timeline/*.tsx` were rewritten on top of `@/components/ai-elements/*`:
+
+- `ToolCall.tsx` → `<Tool>` + `<ToolHeader type="dynamic-tool" .../>` + `<ToolContent><ToolInput .../></ToolContent>`. Collapsible by default, no more raw JSON dumps.
+- `ToolResult.tsx` → same treatment via `<ToolOutput>`.
+- `AssistantTurn.tsx` → wraps `<thinking>` blocks in `<Reasoning><ReasoningTrigger /><ReasoningContent>...` so the reasoning can be hidden by default.
+- `ApprovalRequest.tsx` → re-shelled around the AI-Elements `<Confirmation>` card.
+
+### Dependencies added during finishing pass
+
+On top of the plan's pre-flight (`reactflow @dnd-kit/core @dnd-kit/sortable recharts @playwright/test`), the registry-driven vendoring pulled these in:
+
+- **Recharts 2 → 3** — registry components require v3. Tooltip styling rewritten to match `components/ui/tooltip.tsx`'s rounded-2xl bg-foreground panel.
+- **DataGrid stack** — `@tanstack/react-table`, `@tanstack/react-virtual`.
+- **Calendar / dates** — `react-day-picker`, `date-fns` (used by `<DateSelector>`; not yet rendered anywhere visible).
+- **Drag** — `@dnd-kit/modifiers` (for the kanban's drop preview, even though re-ordering is still display-only).
+- **AI-Elements stack** — `ai`, `streamdown`, `@streamdown/{cjk,code,math,mermaid}`, `shiki`, `use-stick-to-bottom`, `motion`, `lucide-react`, `@radix-ui/react-use-controllable-state`.
+
+### Scratch / cruft (NOT shipped)
+
+`components/examples/c-*.tsx` and the root-level `progress-*.png` / `replay-*.png` files were design references and screenshots used during the finishing pass. They are now **gitignored** and stay local; nothing imports them.
+
+### Inngest port
+
+`scripts.inngest:dev` was changed from `http://localhost:3000/api/inngest` to `http://localhost:3100/api/inngest` because port 3000 is taken on the operator's machine — `pnpm dev -p 3100` is the only invocation we use here.
+
+### What's intentionally out-of-scope (carried forward)
+
+These were follow-ups noted on the original PR description and remain follow-ups:
+
+- `getAgentMetrics.topMemories` queries a JSONB path that doesn't exist on `task_events` — page renders the section conditionally so it just stays empty until the query is fixed.
+- `<CanvasScrubber>` server/client hydration mismatch on live tasks (server snapshots `Date.now()` at SSR time, client recomputes on hydration). Predates phase 10's scrubber rework.
+- `/agents/<name>` rejects `dispatcher` because the worker registry only holds the 10 workers; the dispatcher orchestrator is a separate concept.
+
 
 
 
