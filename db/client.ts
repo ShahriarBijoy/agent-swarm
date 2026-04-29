@@ -1,10 +1,16 @@
-import { neon } from '@neondatabase/serverless';
+import { neon, Pool } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-http';
+import { drizzle as drizzlePool } from 'drizzle-orm/neon-serverless';
 import { env } from '@/lib/env';
 import * as schema from './schema';
 
 const sql = neon(env.DATABASE_URL);
 export const db = drizzle(sql, { schema });
+
+// Pool-based client: supports db.transaction() — use for multi-statement writes.
+// neon-http is stateless per-request and cannot hold a transaction open.
+const pool = new Pool({ connectionString: env.DATABASE_URL });
+export const dbPool = drizzlePool(pool, { schema });
 
 /** Returns 'up' if SELECT 1 resolves within 2s, else 'down'. */
 export async function ping(): Promise<'up' | 'down'> {

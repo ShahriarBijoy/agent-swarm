@@ -8,6 +8,8 @@ import {
   queryCustomerHistory,
   queryVehicles,
   quoteRental,
+  proposeRental,
+  chargeInvoice,
 } from '@/db/queries/domain';
 import { eq } from 'drizzle-orm';
 
@@ -423,6 +425,260 @@ describe('quoteRental', () => {
       result.base_usd + result.per_km_usd + result.insurance_usd + result.service_fee_usd,
     );
     expect(result.total_usd).toBe(expected);
+  });
+});
+
+// ─── proposeRental ──────────────────────────────────────────────────────────
+
+describe('proposeRental', () => {
+  let proposeCustomerId: string;
+  let proposeVehicleId: string;
+
+  const PICKUP = { lat: 42.36, lng: -71.06 };
+  const DROPOFF = { lat: 41.66, lng: -70.27 };
+  const START = new Date('2026-05-02T10:00:00Z');
+  const END = new Date('2026-05-04T18:00:00Z');
+
+  beforeAll(async () => {
+    // Ensure the standard seed vehicles exist and reset the available one to 'available'
+    await ensureSeedVehicles();
+
+    // Re-fetch the available vehicle (TST-S-001)
+    const [v] = await db
+      .select()
+      .from(vehicles)
+      .where(eq(vehicles.plate, 'TST-S-001'));
+    // Reset status in case a prior test run left it in-use
+    await db.update(vehicles).set({ status: 'available' }).where(eq(vehicles.id, v!.id));
+    proposeVehicleId = v!.id;
+
+    // Upsert a customer dedicated to proposeRental tests
+    const [cust] = await db
+      .insert(customers)
+      .values({ name: 'Rental Proposer', email: 'rental-proposer@example.com' })
+      .onConflictDoUpdate({ target: customers.email, set: { name: 'Rental Proposer' } })
+      .returning();
+    proposeCustomerId = cust!.id;
+
+    // Clean up any trips/invoices from prior runs for this customer
+    const priorTrips = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.customerId, proposeCustomerId));
+    for (const t of priorTrips) {
+      await db.delete(invoices).where(eq(invoices.tripId, t.id));
+    }
+    await db.delete(trips).where(eq(trips.customerId, proposeCustomerId));
+  });
+
+  it('creates a trip + draft invoice atomically', async () => {
+    const { trip, invoice } = await proposeRental({
+      customer_id: proposeCustomerId,
+      vehicle_id: proposeVehicleId,
+      pickup: PICKUP,
+      dropoff: DROPOFF,
+      scheduled_start_at: START,
+      scheduled_end_at: END,
+      distance_km: 612,
+      total_usd: 284.5,
+      tax_usd: 22.36,
+      polyline: [
+        [PICKUP.lat, PICKUP.lng],
+        [DROPOFF.lat, DROPOFF.lng],
+      ],
+    });
+    expect(trip.status).toBe('confirmed');
+    expect(invoice.status).toBe('draft');
+    expect(invoice.tripId).toBe(trip.id);
+    expect(invoice.customerId).toBe(proposeCustomerId);
+  });
+
+  it('flips vehicle status to in-use', async () => {
+    // Reset vehicle so we can test the flip again (idempotent re-seed then re-run proposeRental)
+    await db.update(vehicles).set({ status: 'available' }).where(eq(vehicles.id, proposeVehicleId));
+
+    // Clean previous invoke trips/invoices for this customer so we start fresh
+    const priorTrips = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.customerId, proposeCustomerId));
+    for (const t of priorTrips) {
+      await db.delete(invoices).where(eq(invoices.tripId, t.id));
+    }
+    await db.delete(trips).where(eq(trips.customerId, proposeCustomerId));
+
+    await proposeRental({
+      customer_id: proposeCustomerId,
+      vehicle_id: proposeVehicleId,
+      pickup: PICKUP,
+      dropoff: DROPOFF,
+      scheduled_start_at: START,
+      scheduled_end_at: END,
+      distance_km: 612,
+      total_usd: 284.5,
+      tax_usd: 22.36,
+      polyline: [
+        [PICKUP.lat, PICKUP.lng],
+        [DROPOFF.lat, DROPOFF.lng],
+      ],
+    });
+
+    const [updated] = await db.select().from(vehicles).where(eq(vehicles.id, proposeVehicleId));
+    expect(updated!.status).toBe('in-use');
+  });
+
+  it('sets dueAt to one day before scheduled start', async () => {
+    await db.update(vehicles).set({ status: 'available' }).where(eq(vehicles.id, proposeVehicleId));
+    const priorTrips = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.customerId, proposeCustomerId));
+    for (const t of priorTrips) {
+      await db.delete(invoices).where(eq(invoices.tripId, t.id));
+    }
+    await db.delete(trips).where(eq(trips.customerId, proposeCustomerId));
+
+    const { invoice } = await proposeRental({
+      customer_id: proposeCustomerId,
+      vehicle_id: proposeVehicleId,
+      pickup: PICKUP,
+      dropoff: DROPOFF,
+      scheduled_start_at: START,
+      scheduled_end_at: END,
+      distance_km: 612,
+      total_usd: 284.5,
+      tax_usd: 22.36,
+      polyline: [
+        [PICKUP.lat, PICKUP.lng],
+        [DROPOFF.lat, DROPOFF.lng],
+      ],
+    });
+
+    const expectedDueAt = new Date(START);
+    expectedDueAt.setDate(expectedDueAt.getDate() - 1);
+    // Compare date portions only (DB may return slightly different ms)
+    expect(invoice.dueAt.toISOString().slice(0, 10)).toBe(
+      expectedDueAt.toISOString().slice(0, 10),
+    );
+  });
+
+  it('omits taskId when not provided (trip.taskId === null)', async () => {
+    await db.update(vehicles).set({ status: 'available' }).where(eq(vehicles.id, proposeVehicleId));
+    const priorTrips = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.customerId, proposeCustomerId));
+    for (const t of priorTrips) {
+      await db.delete(invoices).where(eq(invoices.tripId, t.id));
+    }
+    await db.delete(trips).where(eq(trips.customerId, proposeCustomerId));
+
+    const { trip } = await proposeRental({
+      customer_id: proposeCustomerId,
+      vehicle_id: proposeVehicleId,
+      pickup: PICKUP,
+      dropoff: DROPOFF,
+      scheduled_start_at: START,
+      scheduled_end_at: END,
+      distance_km: 612,
+      total_usd: 284.5,
+      tax_usd: 22.36,
+      polyline: [
+        [PICKUP.lat, PICKUP.lng],
+        [DROPOFF.lat, DROPOFF.lng],
+      ],
+      // no task_id
+    });
+
+    expect(trip.taskId).toBeNull();
+  });
+});
+
+// ─── chargeInvoice ──────────────────────────────────────────────────────────
+
+describe('chargeInvoice', () => {
+  let chargeCustomerId: string;
+  let chargeVehicleId: string;
+  let draftInvoiceId: string;
+
+  beforeAll(async () => {
+    await ensureSeedVehicles();
+
+    // Use the in-use SUV (TST-X-001) so we don't disturb availability tests
+    const [v] = await db
+      .select()
+      .from(vehicles)
+      .where(eq(vehicles.plate, 'TST-X-001'));
+    chargeVehicleId = v!.id;
+
+    const [cust] = await db
+      .insert(customers)
+      .values({ name: 'Invoice Charger', email: 'invoice-charger@example.com' })
+      .onConflictDoUpdate({ target: customers.email, set: { name: 'Invoice Charger' } })
+      .returning();
+    chargeCustomerId = cust!.id;
+
+    // Clean up prior runs
+    const priorTrips = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.customerId, chargeCustomerId));
+    for (const t of priorTrips) {
+      await db.delete(invoices).where(eq(invoices.tripId, t.id));
+    }
+    await db.delete(trips).where(eq(trips.customerId, chargeCustomerId));
+
+    // Insert a trip + draft invoice
+    const now = new Date();
+    const later = new Date(now.getTime() + 3_600_000);
+    const [trip] = await db
+      .insert(trips)
+      .values({
+        customerId: chargeCustomerId,
+        vehicleId: chargeVehicleId,
+        status: 'confirmed',
+        pickupLat: 42.36,
+        pickupLng: -71.06,
+        dropoffLat: 41.66,
+        dropoffLng: -70.27,
+        scheduledStartAt: now,
+        scheduledEndAt: later,
+        distanceKm: '612.00',
+        totalCostUsd: '284.50',
+        polyline: [
+          [42.36, -71.06],
+          [41.66, -70.27],
+        ],
+      })
+      .returning();
+
+    const dueAt = new Date(now);
+    dueAt.setDate(dueAt.getDate() - 1);
+    const [inv] = await db
+      .insert(invoices)
+      .values({
+        tripId: trip!.id,
+        customerId: chargeCustomerId,
+        amountUsd: '262.14',
+        taxUsd: '22.36',
+        totalUsd: '284.50',
+        status: 'draft',
+        dueAt,
+      })
+      .returning();
+    draftInvoiceId = inv!.id;
+  });
+
+  it('marks invoice paid and sets paidAt', async () => {
+    const { invoice } = await chargeInvoice({ invoice_id: draftInvoiceId });
+    expect(invoice.status).toBe('paid');
+    expect(invoice.paidAt).toBeInstanceOf(Date);
+  });
+
+  it('throws on unknown invoice_id', async () => {
+    await expect(
+      chargeInvoice({ invoice_id: '00000000-0000-0000-0000-000000000000' }),
+    ).rejects.toThrow('invoice 00000000-0000-0000-0000-000000000000 not found');
   });
 });
 

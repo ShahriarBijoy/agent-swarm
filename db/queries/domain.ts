@@ -1,6 +1,6 @@
 import { and, eq, gte, sql } from 'drizzle-orm';
-import { db } from '@/db/client';
-import { customers, trips, vehicles } from '@/db/schema/domain';
+import { db, dbPool } from '@/db/client';
+import { customers, invoices, trips, vehicles } from '@/db/schema/domain';
 
 export type QueryVehiclesArgs = {
   status?: 'available' | 'in-use' | 'maintenance';
@@ -117,5 +117,69 @@ export function quoteRental(args: {
 
 function round2(n: number) {
   return Math.round(n * 100) / 100;
+}
+
+export async function proposeRental(args: {
+  customer_id: string;
+  vehicle_id: string;
+  pickup: { lat: number; lng: number };
+  dropoff: { lat: number; lng: number };
+  scheduled_start_at: Date;
+  scheduled_end_at: Date;
+  distance_km: number;
+  total_usd: number;
+  tax_usd: number;
+  polyline: Array<[number, number]>;
+  task_id?: string;
+}) {
+  return dbPool.transaction(async (tx) => {
+    const [trip] = await tx
+      .insert(trips)
+      .values({
+        customerId: args.customer_id,
+        vehicleId: args.vehicle_id,
+        status: 'confirmed',
+        pickupLat: args.pickup.lat,
+        pickupLng: args.pickup.lng,
+        dropoffLat: args.dropoff.lat,
+        dropoffLng: args.dropoff.lng,
+        scheduledStartAt: args.scheduled_start_at,
+        scheduledEndAt: args.scheduled_end_at,
+        distanceKm: args.distance_km.toString(),
+        totalCostUsd: args.total_usd.toString(),
+        polyline: args.polyline,
+        ...(args.task_id ? { taskId: args.task_id } : {}),
+      })
+      .returning();
+    const dueAt = new Date(args.scheduled_start_at);
+    dueAt.setDate(dueAt.getDate() - 1);
+    const [invoice] = await tx
+      .insert(invoices)
+      .values({
+        tripId: trip!.id,
+        customerId: args.customer_id,
+        amountUsd: (args.total_usd - args.tax_usd).toString(),
+        taxUsd: args.tax_usd.toString(),
+        totalUsd: args.total_usd.toString(),
+        status: 'draft',
+        dueAt,
+      })
+      .returning();
+    await tx
+      .update(vehicles)
+      .set({ status: 'in-use' })
+      .where(eq(vehicles.id, args.vehicle_id));
+    return { trip: trip!, invoice: invoice! };
+  });
+}
+
+export async function chargeInvoice(args: { invoice_id: string }) {
+  const [invoice] = await db
+    .update(invoices)
+    .set({ status: 'paid', paidAt: new Date() })
+    .where(eq(invoices.id, args.invoice_id))
+    .returning();
+  if (!invoice) throw new Error(`invoice ${args.invoice_id} not found`);
+  return { invoice };
 }
 
