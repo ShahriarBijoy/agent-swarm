@@ -154,6 +154,12 @@
   html {
     @apply font-sans;
     }
+  .maplibregl-popup-content {
+    @apply bg-transparent! shadow-none! p-0! rounded-none!;
+    }
+  .maplibregl-popup-tip {
+    @apply hidden!;
+    }
 }
 
 /* phase-10 dashboard tokens — keep in sync with components/theme/tokens.ts */
