@@ -15,6 +15,12 @@ import {
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
+import {
+  CHARGE_INVOICE_FQN,
+  DOMAIN_SERVER_NAME,
+  PROPOSE_RENTAL_FQN,
+  READ_DOMAIN_TOOL_FQNS,
+} from '@/lib/mcp/domain';
 
 describe('buildOrchestratorOptions — phase 08', () => {
   it('uses Opus 4.7 (full ID OK on the orchestrator; only short aliases on subagents)', () => {
@@ -31,7 +37,7 @@ describe('buildOrchestratorOptions — phase 08', () => {
     }
   });
 
-  it('keeps the phase-07 allowedTools list — Bash + Write still excluded so canUseTool gates them', () => {
+  it('phase-10.5 allowedTools: memory + domain reads auto-allow; Bash/Write/propose_rental/charge_invoice gated', () => {
     const opts = buildOrchestratorOptions();
     expect(opts.allowedTools).toEqual([
       'Agent',
@@ -40,10 +46,13 @@ describe('buildOrchestratorOptions — phase 08', () => {
       WRITE_TOOL_FQN,
       REINFORCE_TOOL_FQN,
       FORGET_TOOL_FQN,
+      ...READ_DOMAIN_TOOL_FQNS,
     ]);
     expect([...ORCHESTRATOR_ALLOWED_TOOLS]).toEqual(opts.allowedTools);
     expect(opts.allowedTools).not.toContain('Bash');
     expect(opts.allowedTools).not.toContain('Write');
+    expect(opts.allowedTools).not.toContain(PROPOSE_RENTAL_FQN);
+    expect(opts.allowedTools).not.toContain(CHARGE_INVOICE_FQN);
   });
 
   it('promotes default caps: $1.5 budget, 25 turns, 8192 thinking tokens', () => {
@@ -78,10 +87,11 @@ describe('buildOrchestratorOptions — phase 08', () => {
     expect(withOverride.canUseTool).toBe(stub);
   });
 
-  it('registers the memory MCP server under MEMORY_SERVER_NAME', () => {
+  it('registers the memory + auto-ride-domain MCP servers', () => {
     const opts = buildOrchestratorOptions();
     expect(opts.mcpServers).toBeDefined();
     expect(opts.mcpServers?.[MEMORY_SERVER_NAME]).toBeDefined();
+    expect(opts.mcpServers?.[DOMAIN_SERVER_NAME]).toBeDefined();
   });
 
   it('wires auditPreToolUse as a PreToolUse hook with a catch-all matcher', () => {
