@@ -459,7 +459,6 @@ async function seed(): Promise<void> {
   const IN_USE_PLATES = ['AR-T-2402', 'AR-S-2302', 'AR-V-2401', 'AR-X-2401'];
   // Pair each in-use vehicle to a customer (first 4)
   const liveTrips: typeof trips.$inferInsert[] = [];
-  const liveInvoiceInputs: Array<{ tripInsert: typeof trips.$inferInsert; custId: string }> = [];
 
   for (let i = 0; i < IN_USE_PLATES.length; i++) {
     const plate = IN_USE_PLATES[i] as string;
@@ -469,16 +468,20 @@ async function seed(): Promise<void> {
     const depot = vehicle.depot as DepotKey;
     const depotCoords = DEPOTS[depot];
 
-    // Destination: 0.8–2.5 deg away from depot
-    const latJitter = 0.8 + seededRandom(i * 31 + 7) * 1.7;
-    const lngJitter = 0.8 + seededRandom(i * 31 + 11) * 1.7;
+    // Destination: spread across the map so eta >> startedHoursAgo (progress < 1 on first load).
+    // jitterDeg = 2.5–4.0 deg → ~280–440 km haversine → road-factor 1.25 → eta ~5.8–9.2 h.
+    // startedHoursAgo is only 1–4 h, so progress stays clearly mid-trip.
+    // Alternating sign spreads polylines in different compass directions.
+    const jitterDeg = 2.5 + 0.5 * i;
+    const sign = i % 2 === 0 ? 1 : -1;
     const pickup = { lat: depotCoords.lat, lng: depotCoords.lng };
-    const dropoff = {
-      lat: depotCoords.lat + latJitter,
-      lng: depotCoords.lng + lngJitter,
-    };
+    const dropoffLat = depotCoords.lat + sign * jitterDeg * 0.6;
+    const dropoffLng = depotCoords.lng + sign * jitterDeg;
+    const dropoff = { lat: dropoffLat, lng: dropoffLng };
 
     const route = computeRoute({ pickup, dropoff });
+    const startedHoursAgo = 1 + i;
+    console.log(`  live trip i=${i}: distance_km=${route.distance_km.toFixed(1)}, eta_minutes=${route.eta_minutes.toFixed(1)}, eta_h=${(route.eta_minutes / 60).toFixed(2)}, startedHoursAgo=${startedHoursAgo} → progress≈${((startedHoursAgo * 60) / route.eta_minutes * 100).toFixed(1)}%`);
     const daysCount = 1;
     const quote = quoteRental({
       vehicle: {
@@ -490,7 +493,6 @@ async function seed(): Promise<void> {
     });
 
     // Started 1–4 hours ago
-    const startedHoursAgo = 1 + i;
     const actualStart = new Date(Date.now() - startedHoursAgo * 3_600_000);
     const scheduledStart = new Date(actualStart.getTime() - 15 * 60_000);
     const scheduledEnd = new Date(scheduledStart.getTime() + (route.eta_minutes + 30) * 60_000);
@@ -510,11 +512,6 @@ async function seed(): Promise<void> {
       distanceKm: String(route.distance_km),
       totalCostUsd: String(quote.total_usd),
       polyline: route.polyline,
-    });
-
-    liveInvoiceInputs.push({
-      tripInsert: liveTrips[liveTrips.length - 1]!,
-      custId: customer.id,
     });
   }
 
