@@ -14,6 +14,7 @@ export const ROUTE_OPTIMIZER_TOOLS: readonly string[] = [
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
+  COMPUTE_ROUTE_FQN,
 ] as const;
 
 const PROMPT = `You are Auto-ride's route optimizer.
@@ -43,7 +44,7 @@ export const routeOptimizer: AgentDefinition = {
     'request is about ordering stops, finding a detour, or estimating arrival ' +
     'times for a driver-day.',
   model: 'haiku',
-  tools: [...ROUTE_OPTIMIZER_TOOLS, COMPUTE_ROUTE_FQN],
+  tools: [...ROUTE_OPTIMIZER_TOOLS],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };

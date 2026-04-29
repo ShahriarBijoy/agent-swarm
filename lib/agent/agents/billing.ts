@@ -18,6 +18,9 @@ export const BILLING_TOOLS: readonly string[] = [
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
+  QUOTE_RENTAL_FQN,
+  PROPOSE_RENTAL_FQN,
+  CHARGE_INVOICE_FQN,
 ] as const;
 
 const PROMPT = `You are Auto-ride's billing agent.
@@ -52,7 +55,7 @@ export const billing: AgentDefinition = {
     'Generates invoices, refunds, and payment-status summaries. Use when the ' +
     'task involves money — charging, refunding, or reporting on payments.',
   model: 'sonnet',
-  tools: [...BILLING_TOOLS, QUOTE_RENTAL_FQN, PROPOSE_RENTAL_FQN, CHARGE_INVOICE_FQN],
+  tools: [...BILLING_TOOLS],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };

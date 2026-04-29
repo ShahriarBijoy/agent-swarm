@@ -19,6 +19,8 @@ export const FLEET_ANALYST_TOOLS: readonly string[] = [
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
+  QUERY_VEHICLES_FQN,
+  CHECK_VEHICLE_HEALTH_FQN,
 ] as const;
 
 const PROMPT = `You are Auto-ride's fleet analyst.
@@ -54,7 +56,7 @@ export const fleetAnalyst: AgentDefinition = {
     "Analyzes fleet telemetry, maintenance schedules, and vehicle utilization. " +
     "Use for anything involving fleet data, service intervals, or vehicle reports.",
   model: 'haiku',
-  tools: [...FLEET_ANALYST_TOOLS, QUERY_VEHICLES_FQN, CHECK_VEHICLE_HEALTH_FQN],
+  tools: [...FLEET_ANALYST_TOOLS],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };

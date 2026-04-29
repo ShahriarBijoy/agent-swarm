@@ -17,6 +17,8 @@ export const SUPPORT_TOOLS: readonly string[] = [
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
+  GET_TRIP_STATUS_FQN,
+  QUERY_CUSTOMER_HISTORY_FQN,
 ] as const;
 
 const PROMPT = `You are Auto-ride's customer support agent.
@@ -50,7 +52,7 @@ export const support: AgentDefinition = {
     'Drafts customer support replies. Use when the task involves a customer ' +
     'message, complaint, lost-and-found, refund dispute, or thank-you reply.',
   model: 'sonnet',
-  tools: [...SUPPORT_TOOLS, GET_TRIP_STATUS_FQN, QUERY_CUSTOMER_HISTORY_FQN],
+  tools: [...SUPPORT_TOOLS],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 8,
 };

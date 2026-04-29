@@ -15,6 +15,7 @@ export const MAINTENANCE_PLANNER_TOOLS: readonly string[] = [
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
+  CHECK_VEHICLE_HEALTH_FQN,
 ] as const;
 
 const PROMPT = `You are Auto-ride's maintenance planner.
@@ -50,7 +51,7 @@ export const maintenancePlanner: AgentDefinition = {
     'Use when the request involves service intervals, brake/tire/oil scheduling, ' +
     'or grouping fleet vehicles for a shop visit.',
   model: 'sonnet',
-  tools: [...MAINTENANCE_PLANNER_TOOLS, CHECK_VEHICLE_HEALTH_FQN],
+  tools: [...MAINTENANCE_PLANNER_TOOLS],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 8,
 };

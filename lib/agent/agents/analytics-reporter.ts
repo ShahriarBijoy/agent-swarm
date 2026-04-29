@@ -17,6 +17,8 @@ export const ANALYTICS_REPORTER_TOOLS: readonly string[] = [
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
+  QUERY_VEHICLES_FQN,
+  QUERY_CUSTOMER_HISTORY_FQN,
 ] as const;
 
 const PROMPT = `You are Auto-ride's analytics reporter.
@@ -47,7 +49,7 @@ export const analyticsReporter: AgentDefinition = {
     'Computes aggregate / trend reports about fleet operations. Use when the ' +
     'request is about top-N, totals, weekly trends, or rating distributions.',
   model: 'haiku',
-  tools: [...ANALYTICS_REPORTER_TOOLS, QUERY_VEHICLES_FQN, QUERY_CUSTOMER_HISTORY_FQN],
+  tools: [...ANALYTICS_REPORTER_TOOLS],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };
