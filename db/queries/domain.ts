@@ -151,8 +151,7 @@ export async function proposeRental(args: {
         ...(args.task_id ? { taskId: args.task_id } : {}),
       })
       .returning();
-    const dueAt = new Date(args.scheduled_start_at);
-    dueAt.setDate(dueAt.getDate() - 1);
+    const dueAt = new Date(args.scheduled_start_at.getTime() - 86_400_000);
     const [invoice] = await tx
       .insert(invoices)
       .values({
@@ -165,10 +164,14 @@ export async function proposeRental(args: {
         dueAt,
       })
       .returning();
-    await tx
+    const updated = await tx
       .update(vehicles)
       .set({ status: 'in-use' })
-      .where(eq(vehicles.id, args.vehicle_id));
+      .where(and(eq(vehicles.id, args.vehicle_id), eq(vehicles.status, 'available')))
+      .returning({ id: vehicles.id });
+    if (updated.length === 0) {
+      throw new Error(`vehicle ${args.vehicle_id} not available`);
+    }
     return { trip: trip!, invoice: invoice! };
   });
 }

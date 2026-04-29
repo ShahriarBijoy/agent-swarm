@@ -592,6 +592,87 @@ describe('proposeRental', () => {
 
     expect(trip.taskId).toBeNull();
   });
+
+  it('CAS: second proposeRental for the same vehicle rejects with "not available"', async () => {
+    // Reset vehicle to available and clean up prior trips/invoices
+    await db.update(vehicles).set({ status: 'available' }).where(eq(vehicles.id, proposeVehicleId));
+    const priorTrips = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.customerId, proposeCustomerId));
+    for (const t of priorTrips) {
+      await db.delete(invoices).where(eq(invoices.tripId, t.id));
+    }
+    await db.delete(trips).where(eq(trips.customerId, proposeCustomerId));
+
+    const rentalArgs = {
+      customer_id: proposeCustomerId,
+      vehicle_id: proposeVehicleId,
+      pickup: PICKUP,
+      dropoff: DROPOFF,
+      scheduled_start_at: START,
+      scheduled_end_at: END,
+      distance_km: 612,
+      total_usd: 284.5,
+      tax_usd: 22.36,
+      polyline: [
+        [PICKUP.lat, PICKUP.lng],
+        [DROPOFF.lat, DROPOFF.lng],
+      ] as Array<[number, number]>,
+    };
+
+    // First call succeeds
+    await proposeRental(rentalArgs);
+
+    // Second call must fail because vehicle is now 'in-use'
+    await expect(proposeRental(rentalArgs)).rejects.toThrow(
+      `vehicle ${proposeVehicleId} not available`,
+    );
+
+    // Only one trip should exist for this vehicle+customer combo
+    const allTrips = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.vehicleId, proposeVehicleId));
+    // Filter to just this customer's trips (other describe blocks may have inserted trips)
+    const customerTrips = allTrips.filter((t) => t.customerId === proposeCustomerId);
+    expect(customerTrips).toHaveLength(1);
+  });
+
+  it('DST-safe dueAt: uses millisecond subtraction, not setDate()', async () => {
+    // 2026-03-08 is US DST spring-forward day — setDate() would drift by ±1 h
+    const dstStart = new Date('2026-03-08T10:00:00Z');
+
+    // Reset vehicle to available and clean up
+    await db.update(vehicles).set({ status: 'available' }).where(eq(vehicles.id, proposeVehicleId));
+    const priorTrips = await db
+      .select()
+      .from(trips)
+      .where(eq(trips.customerId, proposeCustomerId));
+    for (const t of priorTrips) {
+      await db.delete(invoices).where(eq(invoices.tripId, t.id));
+    }
+    await db.delete(trips).where(eq(trips.customerId, proposeCustomerId));
+
+    const { invoice } = await proposeRental({
+      customer_id: proposeCustomerId,
+      vehicle_id: proposeVehicleId,
+      pickup: PICKUP,
+      dropoff: DROPOFF,
+      scheduled_start_at: dstStart,
+      scheduled_end_at: new Date(dstStart.getTime() + 2 * 86_400_000),
+      distance_km: 612,
+      total_usd: 284.5,
+      tax_usd: 22.36,
+      polyline: [
+        [PICKUP.lat, PICKUP.lng],
+        [DROPOFF.lat, DROPOFF.lng],
+      ],
+    });
+
+    // Must be exactly 86 400 000 ms before scheduled_start_at — no DST drift
+    expect(invoice.dueAt.getTime()).toBe(dstStart.getTime() - 86_400_000);
+  });
 });
 
 // ─── chargeInvoice ──────────────────────────────────────────────────────────
