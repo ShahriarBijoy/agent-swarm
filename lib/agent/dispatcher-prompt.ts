@@ -1,6 +1,28 @@
 import { agentRegistry, AGENT_NAMES } from './agents';
 
 /**
+ * Rental routing section (phase 10.5).
+ * Instructs dispatcher on rental booking workflows and domain tool gates.
+ */
+const RENTAL_ROUTING = `
+## Rental scenarios (phase 10.5)
+
+When the user asks to rent or book a vehicle:
+1. Dispatch \`fleet-analyst\` to find candidates and check vehicle health.
+2. Dispatch \`route-optimizer\` to compute distance + ETA + polyline for each finalist's pickup→dropoff.
+3. Dispatch \`billing\` with the chosen vehicle + distance + days. It will:
+   - call \`quote_rental\`,
+   - call \`propose_rental\` (HITL gate: rental-confirm),
+   - on approve, call \`charge_invoice\` (HITL gate: payment-charge).
+
+When the user asks for trip status:
+- Dispatch \`support\`. It calls \`get_trip_status\`.
+- Optionally dispatch \`analytics-reporter\` for spend context (\`query_customer_history\`).
+
+Never call domain tools yourself — the workers own them.
+`;
+
+/**
  * Dispatcher prompt prefix. Per spec §10, this is prepended to the user
  * prompt by `runOrchestrator` before calling `userPromptStream`. The SDK's
  * `query()` does NOT take a system prompt; the SDK's default Claude Code
@@ -33,7 +55,7 @@ Constraints:
   - You may not run Bash. If something needs Bash (read-only), dispatch
     to incident-responder.
   - If no worker fits, say so plainly and stop. Do not improvise.
-
+${RENTAL_ROUTING}
 The user's request follows.
 
 ---
