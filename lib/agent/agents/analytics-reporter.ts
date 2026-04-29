@@ -4,6 +4,10 @@ import {
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
+import {
+  QUERY_VEHICLES_FQN,
+  QUERY_CUSTOMER_HISTORY_FQN,
+} from '@/lib/mcp/domain';
 
 export const ANALYTICS_REPORTER_NAME = 'analytics-reporter' as const;
 
@@ -36,12 +40,14 @@ Output format: one paragraph + a 3–5 row top-N list. No charts (no UI here).
 
 Budget: ≤ 6 turns, ≤ $0.05 per invocation.`;
 
+const RENTAL_SCENARIO_PROMPT = `\n\n## Rental scenario context (phase 10.5)\n\nFor fleet or customer analytics:\n- Use \`query_vehicles\` with segment, status, or seat filters to summarize fleet composition and availability.\n- Use \`query_customer_history\` to look up a customer's rental history and spend totals.\n- Return structured summaries (counts, averages, top customers) rather than raw JSON dumps.\n\nYou do not book trips (dispatcher's job) and do not check vehicle health for individual decisions (maintenance-planner's job).`;
+
 export const analyticsReporter: AgentDefinition = {
   description:
     'Computes aggregate / trend reports about fleet operations. Use when the ' +
     'request is about top-N, totals, weekly trends, or rating distributions.',
   model: 'haiku',
-  tools: [...ANALYTICS_REPORTER_TOOLS],
-  prompt: PROMPT,
+  tools: [...ANALYTICS_REPORTER_TOOLS, QUERY_VEHICLES_FQN, QUERY_CUSTOMER_HISTORY_FQN],
+  prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };

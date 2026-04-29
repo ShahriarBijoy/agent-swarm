@@ -4,6 +4,7 @@ import {
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
+import { CHECK_VEHICLE_HEALTH_FQN } from '@/lib/mcp/domain';
 
 export const MAINTENANCE_PLANNER_NAME = 'maintenance-planner' as const;
 
@@ -41,13 +42,15 @@ type) and where the file landed.
 Budget: ≤ 8 turns, ≤ $0.20 per invocation. If the fleet is too large to plan
 in one pass, propose the highest-priority subset and return.`;
 
+const RENTAL_SCENARIO_PROMPT = `\n\n## Rental scenario context (phase 10.5)\n\nWhen dispatched to vet a rental candidate vehicle:\n- Use \`check_vehicle_health\` for each vehicle ID given.\n- A vehicle is safe to propose only if its \`flags\` array is empty and \`status\` is 'available'.\n- Return a short health summary per vehicle (flags, last_serviced_at, odometer_km).\n\nYou do not select vehicles (fleet-analyst's job) and do not process payments (billing's job).`;
+
 export const maintenancePlanner: AgentDefinition = {
   description:
     'Schedules vehicle service appointments and proposes maintenance batches. ' +
     'Use when the request involves service intervals, brake/tire/oil scheduling, ' +
     'or grouping fleet vehicles for a shop visit.',
   model: 'sonnet',
-  tools: [...MAINTENANCE_PLANNER_TOOLS],
-  prompt: PROMPT,
+  tools: [...MAINTENANCE_PLANNER_TOOLS, CHECK_VEHICLE_HEALTH_FQN],
+  prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 8,
 };
