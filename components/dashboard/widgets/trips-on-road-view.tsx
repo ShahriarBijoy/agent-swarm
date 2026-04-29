@@ -35,11 +35,11 @@ const ArcsCanvas = dynamic(
 
 function ArcsSkeleton() {
   return (
-    <div className="absolute inset-0 grid place-items-center bg-[var(--color-surface-warm)]">
+    <div className="absolute inset-0 grid place-items-center bg-[var(--color-ink)]">
       <div className="flex gap-1">
-        <span className="h-1.5 w-1.5 rounded-full bg-black/30 animate-pulse" />
-        <span className="h-1.5 w-1.5 rounded-full bg-black/30 animate-pulse [animation-delay:120ms]" />
-        <span className="h-1.5 w-1.5 rounded-full bg-black/30 animate-pulse [animation-delay:240ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-white/30 animate-pulse" />
+        <span className="h-1.5 w-1.5 rounded-full bg-white/30 animate-pulse [animation-delay:120ms]" />
+        <span className="h-1.5 w-1.5 rounded-full bg-white/30 animate-pulse [animation-delay:240ms]" />
       </div>
     </div>
   );
@@ -75,15 +75,15 @@ export function TripsOnRoad({ data }: { data: FleetVehicle[] }) {
   const totalArcs = journeys.length;
 
   return (
-    <div className="relative flex h-full min-h-[420px] flex-col overflow-hidden bg-[var(--color-surface)]">
+    <div className="relative flex h-full min-h-[420px] flex-col overflow-hidden bg-[var(--color-ink-soft)] text-white">
       <div className="flex flex-wrap items-start justify-between gap-4 px-5 pb-3 pt-4">
         <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-muted-2)]">
+          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-white/45">
             Trips · last 5 per vehicle
           </p>
-          <h2 className="mt-1 flex items-baseline gap-3 text-[28px] font-semibold leading-none tracking-tight text-[var(--color-ink)]">
+          <h2 className="mt-1 flex items-baseline gap-3 text-[28px] font-semibold leading-none tracking-tight text-white">
             <span className="tabular-nums">{totalArcs}</span>
-            <span className="text-[12px] font-normal tracking-normal text-[var(--color-muted)]">
+            <span className="text-[12px] font-normal tracking-normal text-white/55">
               routes across {fleetCount} vehicles · Germany
             </span>
           </h2>
@@ -94,7 +94,7 @@ export function TripsOnRoad({ data }: { data: FleetVehicle[] }) {
             return (
               <span
                 key={s}
-                className="inline-flex items-center gap-1.5 rounded-full border border-[var(--color-line)] bg-[var(--color-surface-warm)] px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-muted)] tabular-nums"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/5 px-2.5 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-white/65 tabular-nums"
               >
                 <span
                   aria-hidden
@@ -124,7 +124,7 @@ export function TripsOnRoad({ data }: { data: FleetVehicle[] }) {
 function HoverCard({ hovered }: { hovered: Journey | null }) {
   if (!hovered) {
     return (
-      <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 rounded-[10px] border border-[var(--color-line)] bg-white/85 px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-[var(--color-muted-2)] backdrop-blur">
+      <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 rounded-[10px] border border-white/10 bg-[var(--color-ink)]/70 px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/55 backdrop-blur">
         <span>hover a route to inspect</span>
         <span>scroll to zoom · Germany · DE</span>
       </div>
@@ -133,7 +133,7 @@ function HoverCard({ hovered }: { hovered: Journey | null }) {
   const meta = SEGMENT_PALETTE[hovered.segment];
   return (
     <div
-      className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center gap-3 rounded-[10px] border bg-white/95 px-3 py-2 backdrop-blur"
+      className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center gap-3 rounded-[10px] border bg-[var(--color-ink)]/85 px-3 py-2 backdrop-blur"
       style={{ borderColor: meta.tint }}
     >
       <span
@@ -141,13 +141,13 @@ function HoverCard({ hovered }: { hovered: Journey | null }) {
         className="h-2.5 w-2.5 rounded-full"
         style={{ backgroundColor: meta.tint }}
       />
-      <div className="flex flex-1 items-baseline gap-2 truncate text-[12px] text-[var(--color-ink)]">
+      <div className="flex flex-1 items-baseline gap-2 truncate text-[12px] text-white">
         <span className="font-mono tracking-tight tabular-nums">
           {hovered.vehiclePlate}
         </span>
         <span
           className="font-mono text-[10px] uppercase tracking-[0.18em]"
-          style={{ color: meta.ink }}
+          style={{ color: meta.tint }}
         >
           {meta.label}
         </span>
@@ -155,7 +155,7 @@ function HoverCard({ hovered }: { hovered: Journey | null }) {
           {hovered.from.name} → {hovered.to.name}
         </span>
       </div>
-      <span className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-[var(--color-muted-2)] tabular-nums">
+      <span className="font-mono text-[10.5px] uppercase tracking-[0.18em] text-white/45 tabular-nums">
         leg {hovered.legIndex + 1}/5
       </span>
     </div>
