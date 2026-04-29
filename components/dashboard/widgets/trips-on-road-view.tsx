@@ -84,7 +84,7 @@ export function TripsOnRoad({ data }: { data: FleetVehicle[] }) {
           <h2 className="mt-1 flex items-baseline gap-3 text-[28px] font-semibold leading-none tracking-tight text-[var(--color-ink)]">
             <span className="tabular-nums">{totalArcs}</span>
             <span className="text-[12px] font-normal tracking-normal text-[var(--color-muted)]">
-              arcs across {fleetCount} vehicles · Germany
+              routes across {fleetCount} vehicles · Germany
             </span>
           </h2>
         </div>
@@ -125,8 +125,8 @@ function HoverCard({ hovered }: { hovered: Journey | null }) {
   if (!hovered) {
     return (
       <div className="pointer-events-none absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 rounded-[10px] border border-[var(--color-line)] bg-white/85 px-3 py-2 font-mono text-[10.5px] uppercase tracking-[0.18em] text-[var(--color-muted-2)] backdrop-blur">
-        <span>hover an arc to inspect</span>
-        <span>Germany · DE</span>
+        <span>hover a route to inspect</span>
+        <span>scroll to zoom · Germany · DE</span>
       </div>
     );
   }

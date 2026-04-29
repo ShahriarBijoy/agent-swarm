@@ -30,7 +30,14 @@ export function AgentNode({ data, compact, linkable = false }: AgentNodeProps) {
   else if (data.state === 'hitl') borderClass = 'border-[var(--color-red)]';
   else if (data.state === 'queued') borderClass = 'border-[var(--color-line-strong)] opacity-55';
 
-  const chips = compact ? data.toolNames.slice(0, 3) : data.toolNames;
+  // Tool names are usually MCP-prefixed (`MCP_AUTO_RIDE_DOMAIN__QUERY_VEHICLES`).
+  // Strip everything before the last `__` so the chip stays scannable inside
+  // narrow worker nodes; the full name still shows on hover.
+  const shortenChip = (name: string) => {
+    const idx = name.lastIndexOf('__');
+    return idx >= 0 ? name.slice(idx + 2) : name;
+  };
+  const chips = compact ? data.toolNames.slice(0, 4) : data.toolNames;
 
   // Workers in full mode link to /agents/<name>; the dispatcher is the
   // orchestrator (not in the worker registry) so it stays a plain node.
@@ -67,8 +74,12 @@ export function AgentNode({ data, compact, linkable = false }: AgentNodeProps) {
       {chips.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1">
           {chips.map((c) => (
-            <span key={c} className={`rounded-[3px] border px-1.5 py-0.5 font-mono text-[8.5px] uppercase tracking-[0.06em] ${isDispatcher ? 'border-white/20 text-white/65' : 'border-[var(--color-line-strong)] text-[var(--color-muted)]'}`}>
-              {c}
+            <span
+              key={c}
+              title={c}
+              className={`max-w-full truncate rounded-[3px] border px-1.5 py-0.5 font-mono text-[8.5px] uppercase tracking-[0.06em] ${isDispatcher ? 'border-white/20 text-white/65' : 'border-[var(--color-line-strong)] text-[var(--color-muted)]'}`}
+            >
+              {shortenChip(c)}
             </span>
           ))}
         </div>
