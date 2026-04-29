@@ -16,9 +16,9 @@ import { computeRoute, quoteRental } from '@/db/queries/domain';
 // Depot coordinates
 // ---------------------------------------------------------------------------
 const DEPOTS = {
-  'fleet-east': { lat: 42.36, lng: -71.06 }, // Boston
-  'fleet-central': { lat: 41.88, lng: -87.63 }, // Chicago
-  'fleet-west': { lat: 37.77, lng: -122.42 }, // SF
+  'fleet-east': { lat: 52.52, lng: 13.405 }, // Berlin
+  'fleet-central': { lat: 48.137, lng: 11.576 }, // Munich
+  'fleet-west': { lat: 50.938, lng: 6.96 }, // Cologne
 } as const;
 
 type DepotKey = keyof typeof DEPOTS;

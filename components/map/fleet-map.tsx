@@ -67,8 +67,8 @@ export function FleetMap() {
     <div className="grid h-[calc(100vh-4rem)] grid-cols-1 md:grid-cols-[1fr_360px]">
       <Map
         className="h-full w-full"
-        center={[-95, 39.5]}
-        zoom={3.5}
+        center={[10.4, 51.1]}
+        zoom={6}
       >
         {vehicles.map((v) => (
           <VehicleMarker

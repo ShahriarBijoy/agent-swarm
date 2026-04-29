@@ -6,7 +6,7 @@ const TEMPLATE_AREAS = [
   '"canvas canvas canvas hitl   lime  "',
   '"canvas canvas canvas cleanup lime  "',
   '"cost   cost   cost   refl    black "',
-  '"trips  trips  trips  .      .     "',
+  '"trips  trips  trips  trips   trips "',
 ].join(' ');
 
 export function BentoGrid({ children }: { children: ReactNode }) {
