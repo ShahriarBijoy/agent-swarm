@@ -25,7 +25,8 @@
     "recall:demo": "tsx --env-file=.env.local scripts/recall-demo.ts",
     "memory:demo": "tsx --env-file=.env.local scripts/memory-demo.ts",
     "query:demo": "tsx --env-file=.env.local scripts/query-demo.ts",
-    "cleanup:run-once": "tsx --env-file=.env.local scripts/cleanup-run-once.ts"
+    "cleanup:run-once": "tsx --env-file=.env.local scripts/cleanup-run-once.ts",
+    "seed:domain": "tsx --env-file=.env.local db/seed/domain.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "0.2.117",
