@@ -53,6 +53,8 @@ export interface DeploymentData {
   commitMessage: string;
   commitHash: string;
   steps: DeploymentStep[];
+  imagePreviewUrl?: string;
+  imageAlt?: string;
 }
 
 // --- Components ---
@@ -289,8 +291,9 @@ export const DeploymentCard: React.FC<{ data: DeploymentData }> = ({
           <div className="flex flex-col gap-6 sm:gap-8 md:flex-row">
             <div className="group relative aspect-16/10 w-full cursor-crosshair overflow-hidden rounded-xl border border-neutral-200 bg-neutral-100 md:w-64 dark:border-[#2a2a2c] dark:bg-black">
               <img
-                title="site preview"
-                src="https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=400"
+                title={data.imageAlt ?? 'site preview'}
+                alt={data.imageAlt ?? 'site preview'}
+                src={data.imagePreviewUrl ?? 'https://images.unsplash.com/photo-1614850523296-d8c1af93d400?q=80&w=400'}
                 className="h-full w-full object-cover opacity-60 grayscale transition-all duration-700 group-hover:opacity-100 group-hover:grayscale-0"
               />
               <div className="absolute inset-0 flex flex-col justify-end bg-linear-to-t from-black/60 to-transparent p-4 sm:justify-center sm:from-transparent">
