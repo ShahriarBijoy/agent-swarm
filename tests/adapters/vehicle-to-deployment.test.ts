@@ -37,7 +37,7 @@ describe('vehicleToDeploymentData', () => {
     expect(data.lastActive).toBe('serviced 5d ago');
     expect(data.commitMessage).toBe('Idle in depot · $95/day');
     expect(data.commitHash).toBe(SEDAN.id.slice(0, 7));
-    expect(data.imagePreviewUrl).toBe('/vehicles/honda-accord.png');
+    expect(data.imagePreviewUrl).toBe('/vehicles/sedan.jpg');
     expect(data.steps).toHaveLength(4);
     expect(data.steps.every((s) => s.status === 'pending')).toBe(true);
   });

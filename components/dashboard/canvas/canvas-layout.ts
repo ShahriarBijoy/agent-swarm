@@ -62,6 +62,15 @@ const DISPATCHER = 'dispatcher';
  * @param asOfMs     optional epoch ms cutoff; events.created_at > asOfMs are ignored for STATE only
  */
 export function layoutCanvas(events: TaskEvent[], asOfMs?: number): CanvasLayout {
+  // RSC serialization can turn createdAt into an ISO string before this fn
+  // sees it. Normalize once so every .getTime() call downstream is safe.
+  const normalized = events.map((e) =>
+    e.createdAt instanceof Date
+      ? e
+      : ({ ...e, createdAt: new Date(e.createdAt as unknown as string) } as TaskEvent),
+  );
+  events = normalized;
+
   // ---- Pass 1: discover workers from the full events list (stable structure) ----
   const workers = new Map<string, AgentNodeData>();
 

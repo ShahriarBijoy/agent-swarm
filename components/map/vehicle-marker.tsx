@@ -1,22 +1,20 @@
 'use client';
 
 import { MapMarker, MarkerContent } from '@/components/ui/map';
-
-const COLOR = {
-  available: '#22c55e',
-  'in-use': '#f59e0b',
-  maintenance: '#ef4444',
-} as const;
+import { cn } from '@/lib/utils';
+import { SEGMENT_TINT, type VehicleSegment, type VehicleStatus } from './fleet-status-bar';
 
 export function VehicleMarker({
   vehicle,
   activeTrip,
+  selected,
   onClick,
 }: {
   vehicle: {
     id: string;
     plate: string;
-    status: 'available' | 'in-use' | 'maintenance';
+    segment: VehicleSegment;
+    status: VehicleStatus;
     homeLat: number;
     homeLng: number;
   };
@@ -25,22 +23,44 @@ export function VehicleMarker({
     actualStartAt: string | null;
     scheduledEndAt: string;
   };
+  selected: boolean;
   onClick: () => void;
 }) {
-  const [lat, lng] =
-    activeTrip?.polyline
-      ? interpolate(activeTrip.polyline, computeProgress(activeTrip))
-      : [vehicle.homeLat, vehicle.homeLng];
+  const [lat, lng] = activeTrip?.polyline
+    ? interpolate(activeTrip.polyline, computeProgress(activeTrip))
+    : [vehicle.homeLat, vehicle.homeLng];
+
+  const tint = SEGMENT_TINT[vehicle.segment];
+  const moving = vehicle.status === 'in-use';
+  const broken = vehicle.status === 'maintenance';
+
   return (
     <MapMarker latitude={lat} longitude={lng} onClick={onClick}>
       <MarkerContent>
         <button
-          aria-label={`${vehicle.plate} ${vehicle.status}`}
-          className="h-3 w-3 rounded-full border-2 border-white shadow"
-          style={{
-            backgroundColor: COLOR[vehicle.status],
-          }}
-        />
+          type="button"
+          aria-label={`${vehicle.plate} · ${vehicle.status}`}
+          className={cn(
+            'relative grid place-items-center transition-transform',
+            selected ? 'scale-125' : 'hover:scale-110',
+          )}
+        >
+          {moving ? (
+            <span
+              aria-hidden
+              className="absolute h-5 w-5 rounded-full opacity-60 animate-ping"
+              style={{ backgroundColor: tint }}
+            />
+          ) : null}
+          <span
+            className={cn(
+              'relative h-3.5 w-3.5 rounded-full border-2 border-white shadow-[0_1px_4px_rgba(0,0,0,0.4)]',
+              broken && 'ring-2 ring-rose-400/60',
+              selected && 'ring-2 ring-[var(--color-ink)] ring-offset-1 ring-offset-white',
+            )}
+            style={{ backgroundColor: tint }}
+          />
+        </button>
       </MarkerContent>
     </MapMarker>
   );
@@ -65,5 +85,5 @@ function interpolate(
     polyline.length - 1,
     Math.floor(t * (polyline.length - 1)),
   );
-  return polyline[idx];
+  return polyline[idx] ?? polyline[0] ?? [0, 0];
 }

@@ -6,6 +6,9 @@ type NavItem = { label: string; href: string; match: (path: string) => boolean }
 
 const NAV: NavItem[] = [
   { label: 'Home',     href: '/',         match: (p) => p === '/' },
+  { label: 'Map',      href: '/map',      match: (p) => p === '/map' || p.startsWith('/map/') },
+  { label: 'Billing',  href: '/billing',  match: (p) => p === '/billing' || p.startsWith('/billing/') },
+  { label: 'Chat',     href: '/chat',     match: (p) => p === '/chat' || p.startsWith('/chat/') },
   { label: 'Tasks',    href: '/tasks',    match: (p) => p === '/tasks' || p.startsWith('/tasks/') },
   { label: 'Agents',   href: '/agents',   match: (p) => p === '/agents' || p.startsWith('/agents/') },
   { label: 'Memories', href: '/memories', match: (p) => p === '/memories' },

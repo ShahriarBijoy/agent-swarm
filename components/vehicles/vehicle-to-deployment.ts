@@ -72,7 +72,7 @@ export function vehicleToDeploymentData(args: {
     commitMessage,
     commitHash,
     steps,
-    imagePreviewUrl: `/vehicles/${vehicle.imageSlug}.png`,
+    imagePreviewUrl: `/vehicles/${vehicle.segment}.jpg`,
     imageAlt: `${vehicle.make} ${vehicle.model} ${vehicle.year}`,
   };
 }
