@@ -53,8 +53,16 @@ export const queryVehiclesTool = tool(
     range_min_km: z.number().int().min(1).max(2000).optional(),
   },
   async (args) => {
-    const rows = await queryVehicles(args);
-    return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] };
+    try {
+      const rows = await queryVehicles(args);
+      return { content: [{ type: 'text', text: JSON.stringify(rows, null, 2) }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `query_vehicles failed: ${msg}` }],
+      };
+    }
   },
   { annotations: { readOnlyHint: true } },
 );
@@ -67,8 +75,16 @@ export const computeRouteTool = tool(
     dropoff: z.object({ lat: z.number(), lng: z.number() }),
   },
   async (args) => {
-    const result = computeRoute(args);
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    try {
+      const result = computeRoute(args);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `compute_route failed: ${msg}` }],
+      };
+    }
   },
   { annotations: { readOnlyHint: true } },
 );
@@ -82,15 +98,23 @@ export const quoteRentalTool = tool(
     days: z.number().int().min(1).max(60),
   },
   async (args) => {
-    const [vehicle] = await db.select().from(vehicles).where(eq(vehicles.id, args.vehicle_id));
-    if (!vehicle) {
+    try {
+      const [vehicle] = await db.select().from(vehicles).where(eq(vehicles.id, args.vehicle_id));
+      if (!vehicle) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `unknown vehicle ${args.vehicle_id}` }],
+        };
+      }
+      const quote = quoteRental({ vehicle, distance_km: args.distance_km, days: args.days });
+      return { content: [{ type: 'text', text: JSON.stringify(quote) }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
       return {
         isError: true,
-        content: [{ type: 'text', text: `unknown vehicle ${args.vehicle_id}` }],
+        content: [{ type: 'text', text: `quote_rental failed: ${msg}` }],
       };
     }
-    const quote = quoteRental({ vehicle, distance_km: args.distance_km, days: args.days });
-    return { content: [{ type: 'text', text: JSON.stringify(quote) }] };
   },
   { annotations: { readOnlyHint: true } },
 );
@@ -100,8 +124,16 @@ export const checkVehicleHealthTool = tool(
   'Return the maintenance flags for a vehicle. Read-only.',
   { vehicle_id: z.string().uuid() },
   async (args) => {
-    const result = await checkVehicleHealth(args.vehicle_id);
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    try {
+      const result = await checkVehicleHealth(args.vehicle_id);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `check_vehicle_health failed: ${msg}` }],
+      };
+    }
   },
   { annotations: { readOnlyHint: true } },
 );
@@ -114,8 +146,16 @@ export const getTripStatusTool = tool(
     customer_email: z.string().email().optional(),
   },
   async (args) => {
-    const result = await getTripStatus(args);
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    try {
+      const result = await getTripStatus(args);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `get_trip_status failed: ${msg}` }],
+      };
+    }
   },
   { annotations: { readOnlyHint: true } },
 );
@@ -128,8 +168,16 @@ export const queryCustomerHistoryTool = tool(
     customer_id: z.string().uuid().optional(),
   },
   async (args) => {
-    const result = await queryCustomerHistory(args);
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    try {
+      const result = await queryCustomerHistory(args);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `query_customer_history failed: ${msg}` }],
+      };
+    }
   },
   { annotations: { readOnlyHint: true } },
 );
@@ -151,12 +199,20 @@ export const proposeRentalTool = tool(
     task_id: z.string().uuid().optional(),
   },
   async (args) => {
-    const result = await proposeRental({
-      ...args,
-      scheduled_start_at: new Date(args.scheduled_start_at),
-      scheduled_end_at: new Date(args.scheduled_end_at),
-    });
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    try {
+      const result = await proposeRental({
+        ...args,
+        scheduled_start_at: new Date(args.scheduled_start_at),
+        scheduled_end_at: new Date(args.scheduled_end_at),
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `propose_rental failed: ${msg}` }],
+      };
+    }
   },
   { annotations: { readOnlyHint: false } },
 );
@@ -166,8 +222,16 @@ export const chargeInvoiceTool = tool(
   'Mark an invoice paid. Always HITL-gated by the payment-charge gate.',
   { invoice_id: z.string().uuid() },
   async (args) => {
-    const result = await chargeInvoice({ invoice_id: args.invoice_id });
-    return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    try {
+      const result = await chargeInvoice({ invoice_id: args.invoice_id });
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return {
+        isError: true,
+        content: [{ type: 'text', text: `charge_invoice failed: ${msg}` }],
+      };
+    }
   },
   { annotations: { readOnlyHint: false } },
 );

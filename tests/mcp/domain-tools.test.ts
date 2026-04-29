@@ -470,27 +470,26 @@ describe('proposeRentalTool handler', () => {
   });
 
   it('returns isError (via thrown error from query) when vehicle not available', async () => {
-    // Vehicle is now 'in-use' after the previous test — a second propose should fail
-    // The handler does not catch, so we expect the result to propagate as a throw.
-    // We catch it here and check the error message.
-    await expect(
-      proposeRentalTool.handler(
-        {
-          customer_id: proposeCustomerId,
-          vehicle_id: proposeVehicleId,
-          pickup: PICKUP,
-          dropoff: DROPOFF,
-          scheduled_start_at: START_ISO,
-          scheduled_end_at: END_ISO,
-          distance_km: 612,
-          total_usd: 284.5,
-          tax_usd: 22.36,
-          polyline: POLYLINE,
-          task_id: undefined,
-        },
-        undefined,
-      ),
-    ).rejects.toThrow('not available');
+    // Vehicle is now 'in-use' after the previous test — a second propose should fail.
+    // The handler catches the error and returns isError: true.
+    const result = await proposeRentalTool.handler(
+      {
+        customer_id: proposeCustomerId,
+        vehicle_id: proposeVehicleId,
+        pickup: PICKUP,
+        dropoff: DROPOFF,
+        scheduled_start_at: START_ISO,
+        scheduled_end_at: END_ISO,
+        distance_km: 612,
+        total_usd: 284.5,
+        tax_usd: 22.36,
+        polyline: POLYLINE,
+        task_id: undefined,
+      },
+      undefined,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(/propose_rental failed.*not available/);
   });
 });
 
@@ -514,10 +513,15 @@ describe('chargeInvoiceTool handler', () => {
     expect(body.invoice.paidAt).not.toBeNull();
   });
 
-  it('throws for an unknown invoice_id', async () => {
-    await expect(
-      chargeInvoiceTool.handler({ invoice_id: '00000000-0000-0000-0000-000000000000' }, undefined),
-    ).rejects.toThrow('invoice 00000000-0000-0000-0000-000000000000 not found');
+  it('returns isError for an unknown invoice_id', async () => {
+    const result = await chargeInvoiceTool.handler(
+      { invoice_id: '00000000-0000-0000-0000-000000000000' },
+      undefined,
+    );
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toMatch(
+      /charge_invoice failed.*invoice 00000000-0000-0000-0000-000000000000 not found/,
+    );
   });
 });
 
