@@ -9,7 +9,7 @@ import {
   FramePanel,
   FrameTitle,
 } from '@/components/reui/frame';
-import { VehicleCard } from '@/components/vehicles/vehicle-card';
+import { VehicleInspect, type ActiveTrip } from './vehicle-inspect';
 import { VehicleMarker } from './vehicle-marker';
 import {
   FleetStatusBar,
@@ -104,10 +104,18 @@ export function FleetMap() {
     [vehicles, selectedId],
   );
 
-  const selectedTripRow = useMemo<TripRow | undefined>(
-    () => (selected ? trips.find((t) => t.trip.vehicleId === selected.id) : undefined),
-    [selected, trips],
-  );
+  const selectedTrip = useMemo<ActiveTrip | undefined>(() => {
+    if (!selected) return undefined;
+    const row = trips.find((t) => t.trip.vehicleId === selected.id);
+    if (!row) return undefined;
+    return {
+      id: row.trip.id,
+      distanceKm: row.trip.distanceKm,
+      actualStartAt: row.trip.actualStartAt,
+      scheduledEndAt: row.trip.scheduledEndAt,
+      customerName: row.customer?.name ?? null,
+    };
+  }, [selected, trips]);
 
   return (
     <div
@@ -198,31 +206,12 @@ export function FleetMap() {
         </FrameHeader>
         <FramePanel className="min-h-0 flex-1 overflow-hidden border-[var(--color-line)] bg-[var(--color-surface-warm)] p-0">
           {selected ? (
-            <div className="h-full overflow-y-auto px-3 py-4">
-              <VehicleCard
-                vehicle={{
-                  ...selected,
-                  lastServicedAt: selected.lastServicedAt
-                    ? new Date(selected.lastServicedAt)
-                    : null,
-                }}
-                activeTrip={
-                  selectedTripRow
-                    ? {
-                        id: selectedTripRow.trip.id,
-                        distanceKm: selectedTripRow.trip.distanceKm,
-                        actualStartAt: selectedTripRow.trip.actualStartAt
-                          ? new Date(selectedTripRow.trip.actualStartAt)
-                          : null,
-                        scheduledEndAt: new Date(
-                          selectedTripRow.trip.scheduledEndAt,
-                        ),
-                      }
-                    : undefined
-                }
-                destinationLabel={selectedTripRow?.customer?.name}
-              />
-            </div>
+            <VehicleInspect
+              key={selected.id}
+              vehicle={selected}
+              activeTrip={selectedTrip}
+              onClose={() => setSelectedId(null)}
+            />
           ) : (
             <FleetRail
               vehicles={filtered}
