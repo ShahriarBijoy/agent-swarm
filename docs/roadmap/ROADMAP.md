@@ -24,6 +24,7 @@ Phases 01→07 build a **vertical slice** (scaffold → schema → memory MCP �
 | 08 | **full 11-agent swarm** | Define dispatcher, fleet analyst, maintenance planner, billing, support, reflector + 5 others. Flat fan-out (no nested subagents — SDK limitation). Short-name models only on subagents. Budget caps per agent. | §3 |
 | 09 | **nightly cleanup debate** | Consolidator (Sonnet 4.6) → Adversary (different model family to break correlation) → Judge (Opus 4.6 only on contested > 0.7). Tombstoned rows reversible for 14 days. Inngest cron with `memory_cleanup_runs` + `memory_cleanup_proposals` logs. | §5 |
 | 10 | **org chart + metrics + kanban** | React Flow org chart (11 nodes, live status), dnd-kit kanban (queued / in-progress / awaiting-approval / done / failed), Recharts per-agent metrics (p50/p95 latency, token spend, success rate), memories admin browser with bucket/segment filters. | §7 |
+| 10.5 | **scenario simulator** | Customer chat at `/chat` → POST `/api/tasks` (reuses 06) → existing 11-agent swarm handles end-to-end. New tables: `vehicles` / `trips` / `customers` / `invoices`. Vehicle cards via `components/ui/deployment-card.tsx` (PNG previews from `public/vehicles/`). `/map` (mapcn / `components/ui/map.tsx`) shows live fleet. `/billing` shows invoices + accounts. Two seed scenarios: rent-a-vehicle, trip-status. Reshuffle (no new agents): extend prompts + add domain MCP tools for `fleet-analyst`, `route-optimizer`, `maintenance-planner`, `billing`, `support`, `analytics-reporter`, `incident-responder`, `compliance-auditor`. New HITL gate types: `rental-confirm`, `payment-charge`. | §3, §4, §7 |
 | 11 | **auth** | Better Auth + sessions + sign-up/login. Gate all routes except `/health` and `/login`. `EventSource` SSE auth via short-lived signed query-param token (no cookies on EventSource). | §7 |
 | 12 | **observability + deploy** | Langfuse via `@arizeai/openinference-instrumentation-claude-agent-sdk` + `@langfuse/otel` span processor (wired in sandbox process, not Vercel Functions). Vercel (webapp) + Vercel Sandbox **or** Fly.io (agent runtime — decide here) + CI. | §7, §8 |
 
@@ -40,8 +41,9 @@ Phases 01→07 build a **vertical slice** (scaffold → schema → memory MCP �
        │                   ├─ 08 11-agent swarm
        │                   │   └─ 09 nightly cleanup (needs 04 + 08)
        │                   └─ 10 dashboards (needs 06 + 07)
-       │                       └─ 11 auth
-       │                           └─ 12 observability + deploy
+       │                       └─ 10.5 scenario simulator (needs 08 + 10)
+       │                           └─ 11 auth
+       │                               └─ 12 observability + deploy
 ```
 
 Phases 08, 09, 10 are parallel-safe once 07 lands — multiple worktrees OK per `gitworkflow.md`.
