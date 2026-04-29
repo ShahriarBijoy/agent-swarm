@@ -20,12 +20,14 @@ import {
   Settings,
   ShieldCheck,
   AlertCircle,
+  Share2,
+  Check,
+  Clock,
+  ArrowUpRight,
+  CircleDashed,
+  CalendarDays,
+  Calendar,
 } from 'lucide-react';
-import { PiShareFatLight, PiCheckBold } from 'react-icons/pi';
-import { LuClock } from 'react-icons/lu';
-import { TbArrowUpRight, TbCircleDashed } from 'react-icons/tb';
-import { BsCalendar4Week } from 'react-icons/bs';
-import { HiMiniCalendar } from 'react-icons/hi2';
 import { cn } from '@/lib/utils';
 
 // --- Interfaces  ---
@@ -272,9 +274,9 @@ export const DeploymentCard: React.FC<{ data: DeploymentData }> = ({
                 className="flex flex-1 items-center justify-center gap-2 rounded-full border border-neutral-200 px-3 py-2 text-[12px] text-neutral-500 transition-all hover:bg-neutral-50 hover:text-neutral-900 active:scale-95 sm:flex-none dark:border-[#2a2a2c] dark:text-[#888] dark:hover:bg-neutral-900 dark:hover:text-white"
               >
                 {isCopied ? (
-                  <PiCheckBold size={16} className="text-green-500" />
+                  <Check size={16} className="text-green-500" />
                 ) : (
-                  <PiShareFatLight size={16} />
+                  <Share2 size={16} />
                 )}
                 {isCopied ? 'Copied' : 'Share'}
               </button>
@@ -282,7 +284,7 @@ export const DeploymentCard: React.FC<{ data: DeploymentData }> = ({
                 onClick={handleVisit}
                 className="flex flex-1 items-center justify-center gap-1 rounded-full bg-[#FA692E] px-3 py-2 text-[12px] font-semibold text-white transition-transform hover:bg-[#f3703c] active:scale-95 sm:flex-none dark:text-black"
               >
-                <TbArrowUpRight size={16} /> Visit
+                <ArrowUpRight size={16} /> Visit
               </button>
             </div>
           </div>
@@ -315,14 +317,14 @@ export const DeploymentCard: React.FC<{ data: DeploymentData }> = ({
 
             <div className="grid flex-1 grid-cols-[85px_1fr] items-center gap-y-3 text-[11px] sm:grid-cols-[100px_1fr]">
               <span className="flex items-center gap-1.5 text-[12px] font-medium tracking-wider text-neutral-400 dark:text-[#555]">
-                <HiMiniCalendar /> Env
+                <Calendar size={14} /> Env
               </span>
               <span className="ml-2 font-medium text-neutral-700 dark:text-white/70">
                 {data.environment}
               </span>
 
               <span className="flex items-center gap-1.5 text-[12px] font-medium tracking-wider text-neutral-400 dark:text-[#555]">
-                <TbCircleDashed /> Status
+                <CircleDashed size={14} /> Status
               </span>
               <div className="ml-2 flex items-center gap-2">
                 <span
@@ -344,7 +346,7 @@ export const DeploymentCard: React.FC<{ data: DeploymentData }> = ({
               </div>
 
               <span className="flex items-center gap-1.5 text-[12px] font-medium tracking-wider text-neutral-400 dark:text-[#555]">
-                <BsCalendar4Week /> Created
+                <CalendarDays size={14} /> Created
               </span>
               <span className="ml-2 flex flex-wrap items-center gap-1 text-neutral-500 dark:text-[#878787]">
                 {data.createdTime} by
@@ -354,7 +356,7 @@ export const DeploymentCard: React.FC<{ data: DeploymentData }> = ({
               </span>
 
               <span className="flex items-center gap-1.5 text-[12px] font-medium tracking-wider text-neutral-400 dark:text-[#555]">
-                <LuClock /> Duration
+                <Clock size={14} /> Duration
               </span>
               <div className="ml-2 flex flex-wrap items-center gap-3">
                 <span className="font-mono text-neutral-500 dark:text-[#878787]">
