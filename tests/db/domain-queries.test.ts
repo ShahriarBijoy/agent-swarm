@@ -11,6 +11,57 @@ import {
 } from '@/db/queries/domain';
 import { eq } from 'drizzle-orm';
 
+// ─── Shared seed helper ─────────────────────────────────────────────────────
+// Idempotent: upserts the two canonical test vehicles so every describe block
+// can call this from its own beforeAll without relying on execution order.
+
+async function ensureSeedVehicles() {
+  const seed = [
+    {
+      plate: 'TST-S-001',
+      make: 'Honda',
+      model: 'Accord',
+      year: 2024,
+      segment: 'sedan' as const,
+      seats: 5,
+      rangeKm: 650,
+      homeLat: 42.36,
+      homeLng: -71.06,
+      depot: 'fleet-east',
+      imageSlug: 'honda-accord',
+      dailyRateUsd: '95.00',
+      perKmRateUsd: '0.2800',
+      status: 'available' as const,
+    },
+    {
+      plate: 'TST-X-001',
+      make: 'Honda',
+      model: 'CR-V',
+      year: 2024,
+      segment: 'suv' as const,
+      seats: 5,
+      rangeKm: 720,
+      homeLat: 42.36,
+      homeLng: -71.06,
+      depot: 'fleet-east',
+      imageSlug: 'honda-cr-v',
+      dailyRateUsd: '115.00',
+      perKmRateUsd: '0.3400',
+      status: 'in-use' as const,
+    },
+  ] as const;
+
+  for (const v of seed) {
+    await db
+      .insert(vehicles)
+      .values(v)
+      .onConflictDoUpdate({
+        target: vehicles.plate,
+        set: { status: v.status, segment: v.segment, seats: v.seats, rangeKm: v.rangeKm },
+      });
+  }
+}
+
 // ─── queryVehicles ──────────────────────────────────────────────────────────
 
 describe('queryVehicles', () => {
@@ -21,40 +72,8 @@ describe('queryVehicles', () => {
     await db.delete(customers);
     await db.delete(vehicles);
 
-    await db.insert(vehicles).values([
-      {
-        plate: 'TST-S-001',
-        make: 'Honda',
-        model: 'Accord',
-        year: 2024,
-        segment: 'sedan',
-        seats: 5,
-        rangeKm: 650,
-        homeLat: 42.36,
-        homeLng: -71.06,
-        depot: 'fleet-east',
-        imageSlug: 'honda-accord',
-        dailyRateUsd: '95.00',
-        perKmRateUsd: '0.2800',
-        status: 'available',
-      },
-      {
-        plate: 'TST-X-001',
-        make: 'Honda',
-        model: 'CR-V',
-        year: 2024,
-        segment: 'suv',
-        seats: 5,
-        rangeKm: 720,
-        homeLat: 42.36,
-        homeLng: -71.06,
-        depot: 'fleet-east',
-        imageSlug: 'honda-cr-v',
-        dailyRateUsd: '115.00',
-        perKmRateUsd: '0.3400',
-        status: 'in-use',
-      },
-    ]);
+    // Re-seed via the shared helper (idempotent upsert)
+    await ensureSeedVehicles();
   });
 
   it('filters by status', async () => {
@@ -81,8 +100,9 @@ describe('queryVehicles', () => {
 // ─── checkVehicleHealth ─────────────────────────────────────────────────────
 
 describe('checkVehicleHealth', () => {
-  // Re-uses the vehicles inserted by queryVehicles beforeAll (same module scope,
-  // fileParallelism: false guarantees sequential execution).
+  beforeAll(async () => {
+    await ensureSeedVehicles();
+  });
 
   it('returns ok for an available vehicle with no lastServicedAt', async () => {
     const [vehicle] = await queryVehicles({ status: 'available' });
@@ -167,7 +187,9 @@ describe('getTripStatus', () => {
   let tripId: string;
 
   beforeAll(async () => {
-    // Pick the available vehicle seeded above
+    await ensureSeedVehicles();
+
+    // Pick the available vehicle
     const [v] = await queryVehicles({ status: 'available' });
     vehicleId = v!.id;
 
@@ -241,6 +263,8 @@ describe('queryCustomerHistory', () => {
   let histCustomerId: string;
 
   beforeAll(async () => {
+    await ensureSeedVehicles();
+
     const [v] = await queryVehicles({ status: 'available' });
 
     const [cust] = await db
@@ -351,6 +375,14 @@ describe('computeRoute', () => {
     const result = computeRoute({ pickup, dropoff });
     expect(result.polyline.at(0)).toEqual([pickup.lat, pickup.lng]);
     expect(result.polyline.at(31)).toEqual([dropoff.lat, dropoff.lng]);
+  });
+
+  it('eta_minutes equals distance_km rounded (60 km/h assumption)', () => {
+    const result = computeRoute({
+      pickup: { lat: 0, lng: 0 },
+      dropoff: { lat: 1, lng: 0 },
+    });
+    expect(result.eta_minutes).toBe(Math.round(result.distance_km));
   });
 });
 
