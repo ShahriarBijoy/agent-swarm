@@ -60,20 +60,15 @@ export function FleetRail({
   }, [vehicles]);
 
   return (
-    <aside className="relative flex h-full flex-col overflow-hidden border-l border-[var(--color-line)] bg-[var(--color-surface-warm)]">
-      <header className="flex items-baseline justify-between gap-3 border-b border-[var(--color-line)] px-5 py-4">
-        <div>
-          <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-muted-2)]">
-            Fleet roster
-          </p>
-          <h2 className="mt-1 text-[18px] font-semibold tracking-tight text-[var(--color-ink)]">
-            {vehicles.length} vehicles
-          </h2>
-        </div>
-        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-muted-2)]">
-          live · 5s
+    <aside className="relative flex h-full flex-col overflow-hidden bg-[var(--color-surface-warm)]">
+      <div className="flex items-baseline justify-between border-b border-[var(--color-line)] px-5 py-3">
+        <span className="text-[15px] font-semibold tracking-tight text-[var(--color-ink)] tabular-nums">
+          {vehicles.length} <span className="text-[var(--color-muted)] font-normal">vehicles</span>
         </span>
-      </header>
+        <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-muted-2)]">
+          click marker or row
+        </span>
+      </div>
 
       <div className="flex-1 overflow-y-auto">
         {grouped.length === 0 ? (
@@ -174,9 +169,6 @@ export function FleetRail({
         )}
       </div>
 
-      <footer className="border-t border-[var(--color-line)] bg-[var(--color-surface-warm)] px-5 py-3 text-[10.5px] font-mono uppercase tracking-[0.18em] text-[var(--color-muted-2)]">
-        click marker or row to inspect
-      </footer>
     </aside>
   );
 }

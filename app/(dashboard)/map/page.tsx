@@ -8,9 +8,5 @@ const FleetMap = dynamic(
 );
 
 export default function MapPage() {
-  return (
-    <div className="-mx-6 -mt-6 -mb-10">
-      <FleetMap />
-    </div>
-  );
+  return <FleetMap />;
 }

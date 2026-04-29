@@ -1,11 +1,24 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { ArrowLeft } from 'lucide-react';
 import { Map as MapCanvas, MapRoute } from '@/components/ui/map';
+import {
+  Frame,
+  FrameHeader,
+  FramePanel,
+  FrameTitle,
+} from '@/components/reui/frame';
+import { VehicleCard } from '@/components/vehicles/vehicle-card';
 import { VehicleMarker } from './vehicle-marker';
-import { FleetStatusBar, SEGMENT_TINT, type VehicleSegment, type VehicleStatus, type StatusCounts } from './fleet-status-bar';
+import {
+  FleetStatusBar,
+  SEGMENT_TINT,
+  type VehicleSegment,
+  type VehicleStatus,
+  type StatusCounts,
+} from './fleet-status-bar';
 import { FleetRail, type VehicleRow } from './fleet-rail';
-import { VehicleDetail, type ActiveTrip } from './vehicle-detail';
 
 type TripRow = {
   trip: {
@@ -91,79 +104,134 @@ export function FleetMap() {
     [vehicles, selectedId],
   );
 
-  const selectedTrip = useMemo<ActiveTrip | undefined>(() => {
-    if (!selected) return undefined;
-    const row = trips.find((t) => t.trip.vehicleId === selected.id);
-    if (!row) return undefined;
-    return {
-      id: row.trip.id,
-      distanceKm: row.trip.distanceKm,
-      actualStartAt: row.trip.actualStartAt,
-      scheduledEndAt: row.trip.scheduledEndAt,
-      customerName: row.customer?.name ?? null,
-    };
-  }, [selected, trips]);
+  const selectedTripRow = useMemo<TripRow | undefined>(
+    () => (selected ? trips.find((t) => t.trip.vehicleId === selected.id) : undefined),
+    [selected, trips],
+  );
 
   return (
-    <div className="grid h-[calc(100vh-4rem)] grid-cols-1 md:grid-cols-[1fr_360px]">
-      <div className="relative">
-        <MapCanvas
-          className="h-full w-full"
-          center={[10.4, 51.1]}
-          zoom={5.6}
-          maxZoom={11}
-          minZoom={4.5}
-          maxBounds={[
-            [3.5, 46.5],
-            [16.5, 56.5],
-          ]}
-        >
-          {filtered.map((v) => (
-            <VehicleMarker
-              key={v.id}
-              vehicle={v}
-              selected={v.id === selectedId}
-              onClick={() => setSelectedId(v.id)}
-              activeTrip={trips.find((t) => t.trip.vehicleId === v.id)?.trip}
-            />
-          ))}
-          {filtered
-            .map((v) => trips.find((t) => t.trip.vehicleId === v.id))
-            .filter((t): t is TripRow => t != null)
-            .map((t) => {
-              const veh = vehicles.find((x) => x.id === t.trip.vehicleId);
-              const tint = veh ? SEGMENT_TINT[veh.segment] : '#FA692E';
-              return (
-                <MapRoute
-                  key={t.trip.id}
-                  coordinates={t.trip.polyline.map(([lat, lng]) => [lng, lat])}
-                  color={tint}
-                  width={selectedId === t.trip.vehicleId ? 4 : 2.5}
-                  opacity={selectedId === t.trip.vehicleId ? 0.95 : 0.55}
-                />
-              );
-            })}
-        </MapCanvas>
-        <FleetStatusBar
-          counts={counts}
-          segmentFilter={segmentFilter}
-          onSegmentFilter={setSegmentFilter}
-        />
-      </div>
+    <div
+      className="grid h-[calc(100vh-7rem)] gap-[14px]"
+      style={{ gridTemplateColumns: 'minmax(0,1fr) 420px' }}
+    >
+      <Frame
+        variant="ghost"
+        spacing="sm"
+        className="min-h-0 rounded-[18px] bg-[var(--color-bg-2)]/55"
+      >
+        <FrameHeader className="flex-row items-center justify-between">
+          <FrameTitle className="font-mono text-[9.5px] font-medium uppercase tracking-[0.22em] text-[var(--color-muted-2)]">
+            FLEET MAP · DE
+          </FrameTitle>
+          <span className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-[var(--color-muted-2)] tabular-nums">
+            {filtered.length}/{vehicles.length} on map
+          </span>
+        </FrameHeader>
+        <FramePanel className="relative min-h-0 flex-1 overflow-hidden border-[var(--color-line)] bg-[var(--color-surface-warm)] p-0">
+          <MapCanvas
+            className="h-full w-full"
+            center={[10.4, 51.1]}
+            zoom={5.4}
+            maxZoom={11}
+            minZoom={4.5}
+            maxBounds={[
+              [3.5, 46.5],
+              [16.5, 56.5],
+            ]}
+          >
+            {filtered.map((v) => (
+              <VehicleMarker
+                key={v.id}
+                vehicle={v}
+                selected={v.id === selectedId}
+                onClick={() => setSelectedId(v.id)}
+                activeTrip={trips.find((t) => t.trip.vehicleId === v.id)?.trip}
+              />
+            ))}
+            {filtered
+              .map((v) => trips.find((t) => t.trip.vehicleId === v.id))
+              .filter((t): t is TripRow => t != null)
+              .map((t) => {
+                const veh = vehicles.find((x) => x.id === t.trip.vehicleId);
+                const tint = veh ? SEGMENT_TINT[veh.segment] : '#FA692E';
+                return (
+                  <MapRoute
+                    key={t.trip.id}
+                    coordinates={t.trip.polyline.map(([lat, lng]) => [lng, lat])}
+                    color={tint}
+                    width={selectedId === t.trip.vehicleId ? 4 : 2.5}
+                    opacity={selectedId === t.trip.vehicleId ? 0.95 : 0.5}
+                  />
+                );
+              })}
+          </MapCanvas>
+          <FleetStatusBar
+            counts={counts}
+            segmentFilter={segmentFilter}
+            onSegmentFilter={setSegmentFilter}
+          />
+        </FramePanel>
+      </Frame>
 
-      {selected ? (
-        <VehicleDetail
-          vehicle={selected}
-          activeTrip={selectedTrip}
-          onBack={() => setSelectedId(null)}
-        />
-      ) : (
-        <FleetRail
-          vehicles={filtered}
-          selectedId={selectedId}
-          onSelect={(v) => setSelectedId(v.id)}
-        />
-      )}
+      <Frame
+        variant="ghost"
+        spacing="sm"
+        className="min-h-0 rounded-[18px] bg-[var(--color-bg-2)]/55"
+      >
+        <FrameHeader className="flex-row items-center justify-between">
+          <FrameTitle className="font-mono text-[9.5px] font-medium uppercase tracking-[0.22em] text-[var(--color-muted-2)]">
+            {selected ? `VEHICLE · ${selected.plate}` : 'FLEET ROSTER'}
+          </FrameTitle>
+          {selected ? (
+            <button
+              type="button"
+              onClick={() => setSelectedId(null)}
+              className="inline-flex items-center gap-1.5 rounded-full px-2 py-1 font-mono text-[9.5px] uppercase tracking-[0.22em] text-[var(--color-muted)] transition-colors hover:bg-black/5 hover:text-[var(--color-ink)]"
+            >
+              <ArrowLeft size={11} /> roster
+            </button>
+          ) : (
+            <span className="font-mono text-[9.5px] uppercase tracking-[0.22em] text-[var(--color-muted-2)] tabular-nums">
+              live · 5s
+            </span>
+          )}
+        </FrameHeader>
+        <FramePanel className="min-h-0 flex-1 overflow-hidden border-[var(--color-line)] bg-[var(--color-surface-warm)] p-0">
+          {selected ? (
+            <div className="h-full overflow-y-auto px-3 py-4">
+              <VehicleCard
+                vehicle={{
+                  ...selected,
+                  lastServicedAt: selected.lastServicedAt
+                    ? new Date(selected.lastServicedAt)
+                    : null,
+                }}
+                activeTrip={
+                  selectedTripRow
+                    ? {
+                        id: selectedTripRow.trip.id,
+                        distanceKm: selectedTripRow.trip.distanceKm,
+                        actualStartAt: selectedTripRow.trip.actualStartAt
+                          ? new Date(selectedTripRow.trip.actualStartAt)
+                          : null,
+                        scheduledEndAt: new Date(
+                          selectedTripRow.trip.scheduledEndAt,
+                        ),
+                      }
+                    : undefined
+                }
+                destinationLabel={selectedTripRow?.customer?.name}
+              />
+            </div>
+          ) : (
+            <FleetRail
+              vehicles={filtered}
+              selectedId={selectedId}
+              onSelect={(v) => setSelectedId(v.id)}
+            />
+          )}
+        </FramePanel>
+      </Frame>
     </div>
   );
 }
