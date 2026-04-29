@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 const ORDER: WidgetId[] = [
   'greeting', 'all-agents', 'mini-canvas', 'hitl-queue',
   'memory-writes-lime', 'cleanup-last-night', 'cost-line-12mo',
-  'memory-segments-ring', 'active-workers-black',
+  'memory-segments-ring', 'active-workers-black', 'trips-on-road',
 ];
 
 // Each cell links to a focused list/detail page. The mini-canvas link is
@@ -29,6 +29,7 @@ function hrefFor(id: WidgetId, data: unknown): string | undefined {
     case 'cost-line-12mo':        return '/agents';
     case 'memory-segments-ring':  return '/memories';
     case 'active-workers-black':  return '/agents';
+    case 'trips-on-road':         return '/map';
     default:                      return undefined;
   }
 }
