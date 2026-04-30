@@ -4,6 +4,10 @@ import {
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
+import {
+  GET_TRIP_STATUS_FQN,
+  QUERY_CUSTOMER_HISTORY_FQN,
+} from '@/lib/mcp/domain';
 
 export const SUPPORT_NAME = 'support' as const;
 
@@ -13,6 +17,8 @@ export const SUPPORT_TOOLS: readonly string[] = [
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
+  GET_TRIP_STATUS_FQN,
+  QUERY_CUSTOMER_HISTORY_FQN,
 ] as const;
 
 const PROMPT = `You are Auto-ride's customer support agent.
@@ -39,12 +45,14 @@ outcome. The file is the artefact; don't paste the reply text into chat.
 
 Budget: ≤ 8 turns, ≤ $0.25 per invocation.`;
 
+const RENTAL_SCENARIO_PROMPT = `\n\n## Rental scenario context (phase 10.5)\n\nWhen a customer asks about their trip:\n- Use \`get_trip_status\` with their trip_id or customer_email to retrieve current trip state, vehicle position, and ETA.\n- Use \`query_customer_history\` to retrieve a customer's past trips and total spend when asked.\n- If the customer doesn't provide an email, ask for it before calling either tool.\n\nYou do not process payments (billing's job) and do not book new trips (dispatcher's job).`;
+
 export const support: AgentDefinition = {
   description:
     'Drafts customer support replies. Use when the task involves a customer ' +
     'message, complaint, lost-and-found, refund dispute, or thank-you reply.',
   model: 'sonnet',
   tools: [...SUPPORT_TOOLS],
-  prompt: PROMPT,
+  prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 8,
 };

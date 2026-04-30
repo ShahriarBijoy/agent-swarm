@@ -37,3 +37,31 @@ export const cleanupActionEnum = pgEnum('cleanup_action', [
 ]);
 
 export const linkTypeEnum = pgEnum('link_type', ['merged', 'superseded']);
+
+export const vehicleSegmentEnum = pgEnum('vehicle_segment', [
+  'sedan',
+  'suv',
+  'van',
+  'truck',
+]);
+
+export const vehicleStatusEnum = pgEnum('vehicle_status', [
+  'available',
+  'in-use',
+  'maintenance',
+]);
+
+export const tripStatusEnum = pgEnum('trip_status', [
+  'requested',
+  'confirmed',
+  'in-route',
+  'completed',
+  'cancelled',
+]);
+
+export const invoiceStatusEnum = pgEnum('invoice_status', [
+  'draft',
+  'pending',
+  'paid',
+  'cancelled',
+]);

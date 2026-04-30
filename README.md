@@ -272,6 +272,15 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 
     Playwright spawns the dev server via the `webServer` config and visits the five routes plus a 404 sanity check.
 
+13. **Phase 10.5 — Scenario simulator (rent-a-vehicle).** Visit `/chat` (optionally `?customer=ana.khan@example.com`) to ask the swarm to rent you a vehicle. The agents check inventory, quote the trip, and pause for two HITL approvals (rental confirm + payment charge) before booking. Watch live on `/map`, the bento home (Trips on road), and `/billing`.
+
+    Seed the fleet:
+    ```bash
+    pnpm seed:domain
+    ```
+
+    The swarm's 11 agents are unchanged (`lib/agent/agents/index.ts` is byte-identical to main). Six workers gain new domain-MCP tools and small prompt extensions; a second in-process MCP server (`auto-ride-domain`) ships 8 tools backed by 4 new tables (`vehicles`, `customers`, `trips`, `invoices`).
+
 ## Scripts
 
 | Script | Purpose |
@@ -290,6 +299,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm memory:demo` | End-to-end memory lifecycle dry-run: write six memories, recall with auto-reinforce, explicit reinforce, forget, evaluate promotion proposal, evaluate tombstone-expiry candidate, clean up (phase 04) |
 | `pnpm query:demo` | First real `query()`: orchestrator + fleet-analyst subagent + memory MCP + task_events persistence, CLI-driven. Accepts a prompt as argv. Requires Anthropic auth (see quickstart step 7). (phase 05) |
 | `pnpm cleanup:run-once` | Sends `auto-ride/cleanup.requested`; Inngest dev server invokes `memoryCleanupFn` once. Watch the run in the Inngest UI at [http://localhost:8288](http://localhost:8288). (phase 09) |
+| `pnpm seed:domain` | Seed 19-vehicle fleet + 25 customers + ~95 historical trips/invoices (phase 10.5) |
 
 ## Phase status
 

@@ -2,6 +2,9 @@ import { createQueuedTask } from '@/db/queries/task-api';
 import { finalizeTask } from '@/db/queries/task-runtime';
 import { startTask } from '@/lib/runner/start-task';
 import { createTaskBodySchema } from '@/lib/validation/task-body';
+import { db } from '@/db/client';
+import { customers } from '@/db/schema/domain';
+import { eq } from 'drizzle-orm';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,10 +26,28 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  let prefixedPrompt = parsed.data.prompt;
+  if (parsed.data.kind === 'scenario') {
+    const email = parsed.data.customer_email;
+    if (email) {
+      const [existing] = await db
+        .select()
+        .from(customers)
+        .where(eq(customers.email, email));
+      if (!existing) {
+        await db.insert(customers).values({
+          name: email.split('@')[0],
+          email,
+        });
+      }
+    }
+    prefixedPrompt = `[scenario] customer_email=${email ?? 'unknown'}\n\n${parsed.data.prompt}`;
+  }
+
   let id: string | undefined;
   try {
     const created = await createQueuedTask({
-      prompt: parsed.data.prompt,
+      prompt: prefixedPrompt,
       ...(parsed.data.maxBudgetUsd !== undefined
         ? { maxBudgetUsd: parsed.data.maxBudgetUsd }
         : {}),
@@ -43,7 +64,7 @@ export async function POST(req: Request): Promise<Response> {
     // the orchestrator now bubbles through Inngest's retry semantics.
     await startTask({
       taskId: created.id,
-      prompt: parsed.data.prompt,
+      prompt: prefixedPrompt,
       ...(parsed.data.maxBudgetUsd !== undefined
         ? { maxBudgetUsd: parsed.data.maxBudgetUsd }
         : {}),

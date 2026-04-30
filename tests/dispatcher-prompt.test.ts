@@ -46,4 +46,10 @@ describe('buildDispatcherPrompt', () => {
     const out = buildDispatcherPrompt('');
     expect(out).toBe(DISPATCHER_PREFIX);
   });
+
+  it('the prefix includes the rental routing section (phase 10.5)', () => {
+    expect(DISPATCHER_PREFIX).toContain('rental');
+    expect(DISPATCHER_PREFIX).toContain('fleet-analyst');
+    expect(DISPATCHER_PREFIX).toContain('propose_rental');
+  });
 });

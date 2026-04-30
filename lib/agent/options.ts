@@ -7,6 +7,11 @@ import {
   WRITE_TOOL_FQN,
   memoryMcpServer,
 } from '@/lib/mcp/memory';
+import {
+  DOMAIN_SERVER_NAME,
+  READ_DOMAIN_TOOL_FQNS,
+  domainMcpServer,
+} from '@/lib/mcp/domain';
 import { agentRegistry } from '@/lib/agent/agents';
 import { auditPreToolUse } from '@/lib/agent/hooks';
 
@@ -29,7 +34,9 @@ export const DEFAULT_MAX_THINKING_TOKENS = 8192;
 // the canUseTool callback entirely (per @anthropic-ai/claude-agent-sdk
 // JSDoc: "auto-allowed without prompting for permission"). Bash and Write
 // are deliberately omitted so phase-07's canUseTool gate fires for them.
-// They remain available to the model via the SDK default toolset.
+// Phase 10.5 also omits the two write-side domain tools (propose_rental,
+// charge_invoice) so they go through the canUseTool gate as rental-confirm
+// and payment-charge respectively. The 6 read-side domain tools auto-allow.
 export const ORCHESTRATOR_ALLOWED_TOOLS: readonly string[] = [
   'Agent',
   'Read',
@@ -37,6 +44,7 @@ export const ORCHESTRATOR_ALLOWED_TOOLS: readonly string[] = [
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   FORGET_TOOL_FQN,
+  ...READ_DOMAIN_TOOL_FQNS,
 ] as const;
 
 export type BuildOrchestratorOptionsOverrides = {
@@ -66,7 +74,10 @@ export function buildOrchestratorOptions(
     model: ORCHESTRATOR_MODEL,
     agents: agentRegistry,
     allowedTools: [...ORCHESTRATOR_ALLOWED_TOOLS],
-    mcpServers: { [MEMORY_SERVER_NAME]: memoryMcpServer },
+    mcpServers: {
+      [MEMORY_SERVER_NAME]: memoryMcpServer,
+      [DOMAIN_SERVER_NAME]: domainMcpServer,
+    },
     hooks: {
       PreToolUse: [{ matcher: '.*', hooks: [auditPreToolUse] }],
     },

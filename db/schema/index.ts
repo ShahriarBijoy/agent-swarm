@@ -4,3 +4,4 @@ export * from './memories';
 export * from './cleanup';
 export * from './tasks';
 export * from './approvals';
+export * from './domain';

@@ -7,6 +7,8 @@
  * Inngest + DB) so it's trivially table-testable.
  */
 
+import { PROPOSE_RENTAL_FQN, CHARGE_INVOICE_FQN } from '@/lib/mcp/domain';
+
 const INPUT_PREVIEW_LIMIT = 80;
 
 export type ApprovalDecisionHint =
@@ -54,6 +56,14 @@ export function shouldRequireApproval(
   // 1. Payment tools always gate.
   if (toolName.startsWith('mcp__stripe__')) {
     return { require: true, reason: 'Payment tool — always gated.' };
+  }
+
+  // 1a. Domain tools that mutate state are always gated.
+  if (toolName === PROPOSE_RENTAL_FQN) {
+    return { require: true, reason: 'rental booking — operator must confirm.' };
+  }
+  if (toolName === CHARGE_INVOICE_FQN) {
+    return { require: true, reason: 'payment charge — operator must confirm.' };
   }
 
   // 2. Bash with non-whitelisted commands gates.

@@ -4,6 +4,11 @@ import {
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
+import {
+  QUOTE_RENTAL_FQN,
+  PROPOSE_RENTAL_FQN,
+  CHARGE_INVOICE_FQN,
+} from '@/lib/mcp/domain';
 
 export const BILLING_NAME = 'billing' as const;
 
@@ -13,6 +18,9 @@ export const BILLING_TOOLS: readonly string[] = [
   RECALL_TOOL_FQN,
   WRITE_TOOL_FQN,
   REINFORCE_TOOL_FQN,
+  QUOTE_RENTAL_FQN,
+  PROPOSE_RENTAL_FQN,
+  CHARGE_INVOICE_FQN,
 ] as const;
 
 const PROMPT = `You are Auto-ride's billing agent.
@@ -40,12 +48,14 @@ No JSON dump in the chat — the file is the artefact.
 
 Budget: ≤ 6 turns, ≤ $0.20 per invocation.`;
 
+const RENTAL_SCENARIO_PROMPT = `\n\n## Rental scenario context (phase 10.5)\n\nWhen dispatched to handle a rental:\n1. Use \`quote_rental\` with the chosen vehicle_id + distance_km + days to get total_usd and breakdown.\n2. Use \`propose_rental\` to book the trip — this triggers a HITL gate (rental-confirm); wait for approval before continuing.\n3. After the operator approves the rental, use \`charge_invoice\` with the invoice_id — this triggers a second HITL gate (payment-charge).\n\nYou own all three write-side domain tools. Never skip the quote step; never call charge_invoice before propose_rental is approved.`;
+
 export const billing: AgentDefinition = {
   description:
     'Generates invoices, refunds, and payment-status summaries. Use when the ' +
     'task involves money — charging, refunding, or reporting on payments.',
   model: 'sonnet',
   tools: [...BILLING_TOOLS],
-  prompt: PROMPT,
+  prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };

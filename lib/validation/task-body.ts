@@ -13,6 +13,8 @@ export const createTaskBodySchema = z.object({
   prompt: z.string().min(1).max(4000),
   maxBudgetUsd: z.number().min(0).max(5.0).optional(),
   maxTurns: z.number().int().min(1).max(100).optional(),
+  kind: z.enum(['default', 'scenario']).default('default'),
+  customer_email: z.string().email().optional(),
 });
 
 export type CreateTaskBody = z.infer<typeof createTaskBodySchema>;

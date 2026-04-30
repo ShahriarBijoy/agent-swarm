@@ -9,6 +9,7 @@ import { cleanupLastNightDef } from './widgets/cleanup-last-night';
 import { costLine12MoDef } from './widgets/cost-line-12mo';
 import { memorySegmentsRingDef } from './widgets/memory-segments-ring';
 import { activeWorkersBlackDef } from './widgets/active-workers-black';
+import { tripsOnRoadDef } from './widgets/trips-on-road';
 
 export type WidgetId =
   | 'greeting'
@@ -19,7 +20,8 @@ export type WidgetId =
   | 'cleanup-last-night'
   | 'cost-line-12mo'
   | 'memory-segments-ring'
-  | 'active-workers-black';
+  | 'active-workers-black'
+  | 'trips-on-road';
 
 export type WidgetDef<TData = unknown> = {
   id: WidgetId;
@@ -59,6 +61,7 @@ export const WIDGET_REGISTRY: Record<WidgetId, WidgetDef> = {
   'cost-line-12mo':        costLine12MoDef as WidgetDef,
   'memory-segments-ring':  memorySegmentsRingDef as WidgetDef,
   'active-workers-black':  activeWorkersBlackDef as WidgetDef,
+  'trips-on-road':         tripsOnRoadDef as WidgetDef,
 };
 
 export function variantFor(id: WidgetId): 'default' | 'warm' | 'lime' | 'black' {

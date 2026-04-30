@@ -103,15 +103,11 @@ function CanvasInner({ events, mode, asOf }: AgentCanvasProps) {
   const nodeTypes = useMemo(() => NODE_TYPES, []);
   const edgeTypes = useMemo(() => EDGE_TYPES, []);
 
-  // Explicit width/height lets React Flow skip its async measurement cycle.
-  // Without these, fresh node-object references on every cursor frame keep the
-  // node "unmeasured" and the dispatcher→worker edge fails to route during
-  // replay (only re-appears once cursor returns to live and the prop churn
-  // stops). Heights are approximations — exact value isn't important; presence
-  // of any number is what unblocks edge routing.
+  // Explicit width lets React Flow skip its async measurement cycle for the
+  // horizontal axis. Height is left for the browser to measure so worker nodes
+  // can grow when their tool-chip stack expands past the typical case;
+  // otherwise long MCP tool names overflow the node's clip rect.
   const NODE_W = mode === 'mini' ? 178 : 240;
-  const NODE_H_DISPATCHER = mode === 'mini' ? 56 : 72;
-  const NODE_H_WORKER = mode === 'mini' ? 80 : 110;
 
   const rfNodes = useMemo(
     () =>
@@ -123,9 +119,8 @@ function CanvasInner({ events, mode, asOf }: AgentCanvasProps) {
         draggable: mode === 'full',
         selectable: mode === 'full',
         width: NODE_W,
-        height: n.id === 'dispatcher' ? NODE_H_DISPATCHER : NODE_H_WORKER,
       })),
-    [nodes, mode, NODE_W, NODE_H_DISPATCHER, NODE_H_WORKER],
+    [nodes, mode, NODE_W],
   );
   const rfEdges = useMemo(
     () =>
