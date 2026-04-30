@@ -27,6 +27,7 @@
     "query:demo": "tsx --env-file=.env.local scripts/query-demo.ts",
     "cleanup:run-once": "tsx --env-file=.env.local scripts/cleanup-run-once.ts",
     "seed:domain": "tsx --env-file=.env.local db/seed/domain.ts",
+    "fix:fleet": "tsx --env-file=.env.local scripts/fix-fleet.ts",
     "auth:reset-password": "tsx --env-file=.env.local scripts/auth-reset-password.ts"
   },
   "dependencies": {

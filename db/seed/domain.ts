@@ -383,7 +383,7 @@ const DISTANCES_KM = [120, 240, 384, 612, 850] as const;
 // ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
-async function seed(): Promise<void> {
+export async function seed(): Promise<void> {
   console.log('=== Auto-ride domain seed ===\n');
 
   // ------------------------------------------------------------------
@@ -659,13 +659,23 @@ async function seed(): Promise<void> {
   console.log(`  Invoices : ${insertedHistoricalInvoices.length} paid`);
 }
 
-seed().then(
-  () => {
-    console.log('\nDone.');
-    process.exit(0);
-  },
-  (err: unknown) => {
-    console.error('\nSeed failed:', err);
-    process.exit(1);
-  },
-);
+// Auto-run when invoked directly via `pnpm seed:domain`. Skipped when this
+// file is imported from another script (e.g. scripts/fix-fleet.ts) so the
+// caller can compose the seed with other work and own the exit code.
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
+const isDirectRun =
+  !!process.argv[1] &&
+  path.resolve(fileURLToPath(import.meta.url)) === path.resolve(process.argv[1]);
+if (isDirectRun) {
+  seed().then(
+    () => {
+      console.log('\nDone.');
+      process.exit(0);
+    },
+    (err: unknown) => {
+      console.error('\nSeed failed:', err);
+      process.exit(1);
+    },
+  );
+}
