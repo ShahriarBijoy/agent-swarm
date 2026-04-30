@@ -102,7 +102,7 @@ export default async function TaskPage({
       : null;
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+    <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <nav className="text-xs">
         <Link
           href="/tasks"
