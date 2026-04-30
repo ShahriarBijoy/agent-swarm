@@ -37,6 +37,17 @@ export const auth = betterAuth({
     expiresIn: 60 * 60 * 24 * 7, // 7 days
     updateAge: 60 * 60 * 24, // refresh once per day
   },
+  // Schema (db/schema/auth.ts) keys all four tables on `uuid` columns with
+  // a `gen_random_uuid()` default, but Better Auth's default generateId
+  // emits a 32-char nanoid-style alphanumeric string. Postgres rejects that
+  // for a uuid column → sign-up returns `FAILED_TO_CREATE_USER`. Telling
+  // Better Auth to use 'uuid' makes it emit `gen_random_uuid()`-compatible
+  // values that round-trip through our schema cleanly.
+  advanced: {
+    database: {
+      generateId: 'uuid',
+    },
+  },
   plugins: [nextCookies()],
 });
 
