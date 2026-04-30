@@ -5,6 +5,7 @@ import {
   getTopCustomers,
 } from '@/lib/dashboard/billing-queries';
 import { BillingTable } from './billing-table';
+import { TopCustomersMarquee } from './top-customers-marquee';
 
 export const dynamic = 'force-dynamic';
 
@@ -70,7 +71,7 @@ export default async function BillingPage() {
         </FramePanel>
       </Frame>
 
-      <TopCustomersRail rows={top} />
+      <TopCustomersMarquee rows={top} />
     </main>
   );
 }
@@ -190,59 +191,3 @@ function formatBigUsd(n: number): string {
   });
 }
 
-function TopCustomersRail({
-  rows,
-}: {
-  rows: Array<{ name: string; email: string; spendUsd: number; invoiceCount: number }>;
-}) {
-  if (rows.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-2.5">
-      <div className="flex items-baseline justify-between gap-4">
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-muted)]">
-          Top customers · lifetime
-        </p>
-        <p className="font-mono text-[10px] uppercase tracking-[0.22em] text-[var(--color-muted)]">
-          {rows.length} of many
-        </p>
-      </div>
-      <div className="flex gap-2 overflow-x-auto pb-1">
-        {rows.map((c, idx) => (
-          <article
-            key={c.email}
-            className="group flex min-w-[210px] shrink-0 flex-col gap-2.5 rounded-[10px] border border-[var(--color-line)] bg-[var(--color-surface)]/65 px-3.5 py-3 transition-colors hover:bg-[var(--color-surface)]"
-          >
-            <div className="flex items-baseline justify-between gap-2">
-              <span className="font-mono text-[10px] tabular-nums text-[var(--color-muted-2)]">
-                {String(idx + 1).padStart(2, '0')}
-              </span>
-              <span className="font-mono text-[10px] uppercase tracking-[0.18em] text-[var(--color-muted)]">
-                {c.invoiceCount} inv
-              </span>
-            </div>
-            <div className="space-y-0.5">
-              <div className="truncate text-[13px] font-medium tracking-tight text-[var(--color-ink)]">
-                {c.name}
-              </div>
-              <div className="truncate font-mono text-[10.5px] text-[var(--color-muted)]">
-                {c.email}
-              </div>
-            </div>
-            <div className="flex items-baseline justify-between gap-2 border-t border-dashed border-[var(--color-line)] pt-2">
-              <span className="font-mono text-[9.5px] uppercase tracking-[0.2em] text-[var(--color-muted)]">
-                Spend
-              </span>
-              <span className="font-mono text-[13px] font-semibold tabular-nums tracking-tight text-[var(--color-ink)]">
-                {c.spendUsd.toLocaleString('en-US', {
-                  style: 'currency',
-                  currency: 'USD',
-                  maximumFractionDigits: 0,
-                })}
-              </span>
-            </div>
-          </article>
-        ))}
-      </div>
-    </section>
-  );
-}
