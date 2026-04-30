@@ -89,17 +89,23 @@ export const computeRouteTool = tool(
   { annotations: { readOnlyHint: true } },
 );
 
+const UUID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+
 export const quoteRentalTool = tool(
   'quote_rental',
-  'Compute the rental quote for a vehicle over a distance and duration. Read-only.',
+  'Compute the rental quote for a vehicle over a distance and duration. Read-only. Accepts either the vehicle UUID or its plate as vehicle_id.',
   {
-    vehicle_id: z.string().uuid(),
+    vehicle_id: z.string().min(1),
     distance_km: z.number().positive(),
     days: z.number().int().min(1).max(60),
   },
   async (args) => {
     try {
-      const [vehicle] = await db.select().from(vehicles).where(eq(vehicles.id, args.vehicle_id));
+      const isUuid = UUID_RE.test(args.vehicle_id);
+      const [vehicle] = await db
+        .select()
+        .from(vehicles)
+        .where(isUuid ? eq(vehicles.id, args.vehicle_id) : eq(vehicles.plate, args.vehicle_id));
       if (!vehicle) {
         return {
           isError: true,

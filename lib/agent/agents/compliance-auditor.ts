@@ -1,5 +1,6 @@
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import {
+  MEMORY_SERVER_NAME,
   RECALL_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
@@ -47,6 +48,7 @@ export const complianceAuditor: AgentDefinition = {
     'jurisdiction-specific routing requirements.',
   model: 'haiku',
   tools: [...COMPLIANCE_AUDITOR_TOOLS],
+  mcpServers: [MEMORY_SERVER_NAME],
   prompt: PROMPT,
   maxTurns: 6,
 };

@@ -1,5 +1,6 @@
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import {
+  MEMORY_SERVER_NAME,
   RECALL_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
@@ -45,6 +46,7 @@ export const driverCoach: AgentDefinition = {
     'or a coaching ask.',
   model: 'haiku',
   tools: [...DRIVER_COACH_TOOLS],
+  mcpServers: [MEMORY_SERVER_NAME],
   prompt: PROMPT,
   maxTurns: 6,
 };

@@ -1,10 +1,11 @@
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import {
+  MEMORY_SERVER_NAME,
   RECALL_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
-import { CHECK_VEHICLE_HEALTH_FQN } from '@/lib/mcp/domain';
+import { CHECK_VEHICLE_HEALTH_FQN, DOMAIN_SERVER_NAME } from '@/lib/mcp/domain';
 
 export const MAINTENANCE_PLANNER_NAME = 'maintenance-planner' as const;
 
@@ -52,6 +53,7 @@ export const maintenancePlanner: AgentDefinition = {
     'or grouping fleet vehicles for a shop visit.',
   model: 'sonnet',
   tools: [...MAINTENANCE_PLANNER_TOOLS],
+  mcpServers: [MEMORY_SERVER_NAME, DOMAIN_SERVER_NAME],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 8,
 };

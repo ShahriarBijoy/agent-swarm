@@ -1,10 +1,12 @@
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import {
+  MEMORY_SERVER_NAME,
   RECALL_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
 import {
+  DOMAIN_SERVER_NAME,
   QUERY_VEHICLES_FQN,
   CHECK_VEHICLE_HEALTH_FQN,
 } from '@/lib/mcp/domain';
@@ -46,7 +48,7 @@ vehicles, intervals, dates.
 Budget: ≤ 6 turns, ≤ $0.10 per invocation. If you can't answer within that,
 say so plainly and return.`;
 
-const RENTAL_SCENARIO_PROMPT = `\n\n## Rental scenario context (phase 10.5)\n\nYou operate against a real fleet of road vehicles. When dispatched on a rental request:\n- Use \`query_vehicles\` to list candidates matching seat count, range, and segment.\n- Use \`check_vehicle_health\` on each finalist; do not propose a vehicle whose \`flags\` is non-empty.\n- Return a short JSON-shaped recommendation (max 3 vehicles).\n\nYou do not quote prices (billing's job) and do not compute routes (route-optimizer's job).`;
+const RENTAL_SCENARIO_PROMPT = `\n\n## Rental scenario context (phase 10.5)\n\nYou operate against a real fleet of road vehicles. When dispatched on a rental request:\n- Use \`query_vehicles\` to list candidates matching seat count, range, and segment.\n- Use \`check_vehicle_health\` on each finalist; do not propose a vehicle whose \`flags\` is non-empty.\n- Return a short JSON-shaped recommendation (max 3 vehicles) of the form:\n  \`{"recommendations":[{"id":"<uuid>","plate":"AR-X-2402","make":"Toyota","model":"RAV4","daily_rate_usd":118}]}\`\n  Downstream agents key off \`id\` (the UUID) — never the plate. Always include \`id\`; the plate is for human display only.\n\nYou do not quote prices (billing's job) and do not compute routes (route-optimizer's job).`;
 
 // `model: 'haiku'` — short alias ONLY. Full IDs like 'claude-haiku-4-5'
 // silently fall back to 'inherit' and the subagent quietly runs on the
@@ -57,6 +59,7 @@ export const fleetAnalyst: AgentDefinition = {
     "Use for anything involving fleet data, service intervals, or vehicle reports.",
   model: 'haiku',
   tools: [...FLEET_ANALYST_TOOLS],
+  mcpServers: [MEMORY_SERVER_NAME, DOMAIN_SERVER_NAME],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };

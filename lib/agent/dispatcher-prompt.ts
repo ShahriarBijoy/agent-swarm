@@ -8,9 +8,9 @@ const RENTAL_ROUTING = `
 ## Rental scenarios (phase 10.5)
 
 When the user asks to rent or book a vehicle:
-1. Dispatch \`fleet-analyst\` to find candidates and check vehicle health.
+1. Dispatch \`fleet-analyst\` to find candidates and check vehicle health. Its reply contains a JSON \`recommendations\` array with both \`id\` (UUID) and \`plate\` (human label) per vehicle.
 2. Dispatch \`route-optimizer\` to compute distance + ETA + polyline for each finalist's pickup→dropoff.
-3. Dispatch \`billing\` with the chosen vehicle + distance + days. It will:
+3. Dispatch \`billing\` with the chosen vehicle's **UUID \`id\`** (NOT the plate) + distance + days. Domain tools require UUIDs and reject plates like \`AR-X-2402\`. Billing will:
    - call \`quote_rental\`,
    - call \`propose_rental\` (HITL gate: rental-confirm),
    - on approve, call \`charge_invoice\` (HITL gate: payment-charge).

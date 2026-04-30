@@ -1,10 +1,12 @@
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import {
+  MEMORY_SERVER_NAME,
   RECALL_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
 import {
+  DOMAIN_SERVER_NAME,
   QUERY_VEHICLES_FQN,
   QUERY_CUSTOMER_HISTORY_FQN,
 } from '@/lib/mcp/domain';
@@ -50,6 +52,7 @@ export const analyticsReporter: AgentDefinition = {
     'request is about top-N, totals, weekly trends, or rating distributions.',
   model: 'haiku',
   tools: [...ANALYTICS_REPORTER_TOOLS],
+  mcpServers: [MEMORY_SERVER_NAME, DOMAIN_SERVER_NAME],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };

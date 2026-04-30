@@ -1,10 +1,11 @@
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import {
+  MEMORY_SERVER_NAME,
   RECALL_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
-import { COMPUTE_ROUTE_FQN } from '@/lib/mcp/domain';
+import { COMPUTE_ROUTE_FQN, DOMAIN_SERVER_NAME } from '@/lib/mcp/domain';
 
 export const ROUTE_OPTIMIZER_NAME = 'route-optimizer' as const;
 
@@ -45,6 +46,7 @@ export const routeOptimizer: AgentDefinition = {
     'times for a driver-day.',
   model: 'haiku',
   tools: [...ROUTE_OPTIMIZER_TOOLS],
+  mcpServers: [MEMORY_SERVER_NAME, DOMAIN_SERVER_NAME],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 6,
 };

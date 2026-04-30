@@ -20,6 +20,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import type {
   BundledLanguage,
@@ -371,6 +372,15 @@ export const CodeBlockActions = ({
   </div>
 );
 
+// SSR-safe mount detector. Returns false on the server and on the first
+// client render, then true after hydration. Used to defer shiki cache hits
+// until the client matches what the server sent — see hydration-mismatch fix.
+const subscribeNoop = () => () => {};
+const getServerSnapshotFalse = () => false;
+const getClientSnapshotTrue = () => true;
+const useHasMounted = () =>
+  useSyncExternalStore(subscribeNoop, getClientSnapshotTrue, getServerSnapshotFalse);
+
 export const CodeBlockContent = ({
   code,
   language,
@@ -383,10 +393,16 @@ export const CodeBlockContent = ({
   // Memoized raw tokens for immediate display
   const rawTokens = useMemo(() => createRawTokens(code), [code]);
 
+  // Defer cache lookups until after hydration. The module-level tokensCache
+  // is shared across SSR requests on the same Node worker, so if a prior
+  // render populated it, this render would emit highlighted markup while the
+  // client (with an empty cache) renders rawTokens — hydration mismatch.
+  const hasMounted = useHasMounted();
+
   // Synchronous cache lookup — avoids setState in effect for cached results
   const syncTokens = useMemo(
-    () => highlightCode(code, language) ?? rawTokens,
-    [code, language, rawTokens]
+    () => (hasMounted ? highlightCode(code, language) ?? rawTokens : rawTokens),
+    [code, language, rawTokens, hasMounted]
   );
 
   // Async highlighting result (populated after shiki loads)

@@ -1,6 +1,7 @@
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import {
   FORGET_TOOL_FQN,
+  MEMORY_SERVER_NAME,
   RECALL_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
@@ -50,6 +51,7 @@ export const reflector: AgentDefinition = {
     'request is about cleaning up, contradicting, or correcting prior beliefs.',
   model: 'sonnet',
   tools: [...REFLECTOR_TOOLS],
+  mcpServers: [MEMORY_SERVER_NAME],
   prompt: PROMPT,
   maxTurns: 6,
 };

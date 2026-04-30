@@ -1,10 +1,12 @@
 import type { AgentDefinition } from '@anthropic-ai/claude-agent-sdk';
 import {
+  MEMORY_SERVER_NAME,
   RECALL_TOOL_FQN,
   REINFORCE_TOOL_FQN,
   WRITE_TOOL_FQN,
 } from '@/lib/mcp/memory';
 import {
+  DOMAIN_SERVER_NAME,
   GET_TRIP_STATUS_FQN,
   QUERY_CUSTOMER_HISTORY_FQN,
 } from '@/lib/mcp/domain';
@@ -53,6 +55,7 @@ export const support: AgentDefinition = {
     'message, complaint, lost-and-found, refund dispute, or thank-you reply.',
   model: 'sonnet',
   tools: [...SUPPORT_TOOLS],
+  mcpServers: [MEMORY_SERVER_NAME, DOMAIN_SERVER_NAME],
   prompt: PROMPT + RENTAL_SCENARIO_PROMPT,
   maxTurns: 8,
 };
