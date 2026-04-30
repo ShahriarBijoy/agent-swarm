@@ -1,9 +1,15 @@
 import { NextRequest } from 'next/server';
 import { queryVehicles } from '@/db/queries/domain';
+import { auth } from '@/lib/auth/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (!session) {
+    return Response.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
   const sp = req.nextUrl.searchParams;
   const args: Parameters<typeof queryVehicles>[0] = {};
   const status = sp.get('status');

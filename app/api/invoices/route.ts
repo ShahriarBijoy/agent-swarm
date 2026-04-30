@@ -2,10 +2,16 @@ import { NextRequest } from 'next/server';
 import { db } from '@/db/client';
 import { invoices } from '@/db/schema/domain';
 import { eq, desc } from 'drizzle-orm';
+import { auth } from '@/lib/auth/server';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: NextRequest) {
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (!session) {
+    return Response.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
   const status = req.nextUrl.searchParams.get('status');
   const query = db.select().from(invoices).orderBy(desc(invoices.createdAt)).limit(50);
   if (status === 'draft' || status === 'pending' || status === 'paid' || status === 'cancelled') {

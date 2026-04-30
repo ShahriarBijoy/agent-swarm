@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { WIDGET_REGISTRY, type WidgetId } from '@/components/dashboard/widget-registry';
+import { auth } from '@/lib/auth/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,12 @@ const VALID: ReadonlySet<WidgetId> = new Set([
 ]);
 
 export async function GET(req: Request) {
+  // Phase 11 — defense-in-depth alongside middleware.
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (!session) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
   const url = new URL(req.url);
   const id = url.searchParams.get('widget');
   if (!id || !VALID.has(id as WidgetId)) {
