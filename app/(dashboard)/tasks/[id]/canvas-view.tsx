@@ -7,6 +7,7 @@ import type { taskEvents } from '@/db/schema';
 import { AgentCanvas } from '@/components/dashboard/canvas/agent-canvas';
 import { CanvasScrubber } from '@/components/dashboard/canvas/canvas-scrubber';
 import type { TimelineEvent } from '@/components/timeline/types';
+import { openTaskEventSource } from '@/lib/auth/sse-client';
 
 // `@/db/schema` doesn't export named row types — derive `TaskEvent` from the
 // table the same way `agent-canvas.tsx` and `canvas-layout.ts` do.
@@ -28,6 +29,7 @@ export type CanvasViewProps = {
   startedAt: string;
   endedAt: string | null;
   taskId: string;
+  sseToken: string;
 };
 
 function toTaskEvent(ev: TimelineEvent, taskId: string): TaskEvent {
@@ -47,29 +49,31 @@ export function CanvasView({
   startedAt,
   endedAt,
   taskId,
+  sseToken,
 }: CanvasViewProps) {
   const [events, setEvents] = useState<TimelineEvent[]>(initialEvents);
   const [cursor, setCursor] = useState<number | null>(null);
 
   useEffect(() => {
     if (cursor != null) return;
-    const es = new EventSource(`/api/tasks/${taskId}/stream`);
-    const onTaskEvent = (e: MessageEvent) => {
-      try {
-        const ev = JSON.parse(e.data) as TimelineEvent;
-        setEvents((prev) =>
-          prev.some((p) => p.id === ev.id) ? prev : [...prev, ev],
-        );
-      } catch (err) {
-        console.error('[canvas-view] failed to parse task_event:', err);
-      }
-    };
-    es.addEventListener('task_event', onTaskEvent);
-    return () => {
-      es.removeEventListener('task_event', onTaskEvent);
-      es.close();
-    };
-  }, [cursor, taskId]);
+    const handle = openTaskEventSource(taskId, sseToken, {
+      events: {
+        task_event: (e: MessageEvent) => {
+          try {
+            const ev = JSON.parse(e.data) as TimelineEvent;
+            setEvents((prev) =>
+              prev.some((p) => p.id === ev.id) ? prev : [...prev, ev],
+            );
+          } catch (err) {
+            console.error('[canvas-view] failed to parse task_event:', err);
+          }
+        },
+      },
+      onFatal: (err) =>
+        console.error('[canvas-view] sse refresh failed:', err),
+    });
+    return () => handle.close();
+  }, [cursor, taskId, sseToken]);
 
   const taskEventsForCanvas = useMemo(
     () => events.map((e) => toTaskEvent(e, taskId)),

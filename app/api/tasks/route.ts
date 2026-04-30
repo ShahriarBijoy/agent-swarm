@@ -4,7 +4,8 @@ import { startTask } from '@/lib/runner/start-task';
 import { createTaskBodySchema } from '@/lib/validation/task-body';
 import { db } from '@/db/client';
 import { customers } from '@/db/schema/domain';
-import { eq } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
+import { auth } from '@/lib/auth/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,12 @@ async function safeJson(req: Request): Promise<unknown> {
 }
 
 export async function POST(req: Request): Promise<Response> {
+  // Phase 11 — gate task creation behind a Better Auth session.
+  const session = await auth.api.getSession({ headers: req.headers });
+  if (!session) {
+    return Response.json({ error: 'unauthorized' }, { status: 401 });
+  }
+
   const body = await safeJson(req);
   const parsed = createTaskBodySchema.safeParse(body);
   if (!parsed.success) {
@@ -28,20 +35,28 @@ export async function POST(req: Request): Promise<Response> {
 
   let prefixedPrompt = parsed.data.prompt;
   if (parsed.data.kind === 'scenario') {
-    const email = parsed.data.customer_email;
-    if (email) {
-      const [existing] = await db
-        .select()
-        .from(customers)
-        .where(eq(customers.email, email));
-      if (!existing) {
-        await db.insert(customers).values({
-          name: email.split('@')[0],
-          email,
-        });
-      }
+    // Phase 11 — derive the customer's email from the SESSION, not the body.
+    // Body field is ignored (we accept it for backwards compat with curl
+    // smoke tests but never trust it). The customer row is upserted by
+    // email, then linked to the operator's user_id on first contact.
+    const email = session.user.email;
+    const [existing] = await db
+      .select()
+      .from(customers)
+      .where(eq(customers.email, email));
+    if (!existing) {
+      await db.insert(customers).values({
+        name: session.user.name ?? email.split('@')[0] ?? email,
+        email,
+        userId: session.user.id,
+      });
+    } else if (!existing.userId) {
+      await db
+        .update(customers)
+        .set({ userId: session.user.id })
+        .where(and(eq(customers.id, existing.id), isNull(customers.userId)));
     }
-    prefixedPrompt = `[scenario] customer_email=${email ?? 'unknown'}\n\n${parsed.data.prompt}`;
+    prefixedPrompt = `[scenario] customer_email=${email}\n\n${parsed.data.prompt}`;
   }
 
   let id: string | undefined;

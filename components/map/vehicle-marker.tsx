@@ -77,11 +77,13 @@ export function VehicleMarker({
   selected: boolean;
   onClick: () => void;
 }) {
+  // For stationary vehicles always use the depot-jittered position. The seed
+  // sets every vehicle's home{Lat,Lng} to the depot anchor exactly, so reading
+  // those would stack ~14 markers on 3 points — only ~7 dots survive overdraw.
+  // depotPosition spreads them in a ~25 km cloud keyed off the vehicle id.
   const [lat, lng] = activeTrip?.polyline?.length
     ? interpolate(activeTrip.polyline, computeProgress(activeTrip))
-    : inGermany(vehicle.homeLat, vehicle.homeLng)
-      ? [vehicle.homeLat, vehicle.homeLng]
-      : depotPosition(vehicle);
+    : depotPosition(vehicle);
 
   const tint = SEGMENT_TINT[vehicle.segment];
   const moving = vehicle.status === 'in-use';

@@ -489,7 +489,9 @@ describe('proposeRentalTool handler', () => {
       undefined,
     );
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(/propose_rental failed.*not available/);
+    const errFirst = result.content[0];
+    if (errFirst?.type !== 'text') throw new Error('expected text content');
+    expect(errFirst.text).toMatch(/propose_rental failed.*not available/);
   });
 });
 
@@ -519,7 +521,9 @@ describe('chargeInvoiceTool handler', () => {
       undefined,
     );
     expect(result.isError).toBe(true);
-    expect(result.content[0].text).toMatch(
+    const errFirst = result.content[0];
+    if (errFirst?.type !== 'text') throw new Error('expected text content');
+    expect(errFirst.text).toMatch(
       /charge_invoice failed.*invoice 00000000-0000-0000-0000-000000000000 not found/,
     );
   });

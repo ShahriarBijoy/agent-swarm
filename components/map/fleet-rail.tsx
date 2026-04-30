@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo } from 'react';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { DEPOT_LABELS, SEGMENT_TINT, type VehicleSegment, type VehicleStatus } from './fleet-status-bar';
 
@@ -70,7 +71,8 @@ export function FleetRail({
         </span>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
+      <div className="min-h-0 flex-1">
+        <ScrollArea className="h-full" type="hover">
         {grouped.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-[var(--color-muted)]">
             No vehicles match this filter.
@@ -167,6 +169,7 @@ export function FleetRail({
             </section>
           ))
         )}
+        </ScrollArea>
       </div>
 
     </aside>

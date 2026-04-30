@@ -16,6 +16,7 @@ import {
   invoiceStatusEnum,
 } from './enums';
 import { tasks } from './tasks';
+import { user } from './auth';
 
 export const vehicles = pgTable(
   'vehicles',
@@ -45,13 +46,26 @@ export const vehicles = pgTable(
   ],
 );
 
-export const customers = pgTable('customers', {
-  id: uuid('id').defaultRandom().primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').notNull().unique(),
-  phone: text('phone'),
-  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-});
+export const customers = pgTable(
+  'customers',
+  {
+    id: uuid('id').defaultRandom().primaryKey(),
+    // Phase 11 — opportunistic link to a Better Auth user. Nullable: seeded
+    // demo customers (ana.khan@…) have no operator account, and we only
+    // stamp this column on the first scenario task from a signed-in user
+    // (see app/api/tasks/route.ts).
+    userId: uuid('user_id').references(() => user.id, {
+      onDelete: 'set null',
+    }),
+    name: text('name').notNull(),
+    email: text('email').notNull().unique(),
+    phone: text('phone'),
+    createdAt: timestamp('created_at', { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [index('customers_user_id_idx').on(t.userId)],
+);
 
 export const trips = pgTable(
   'trips',

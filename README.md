@@ -281,6 +281,45 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 
     The swarm's 11 agents are unchanged (`lib/agent/agents/index.ts` is byte-identical to main). Six workers gain new domain-MCP tools and small prompt extensions; a second in-process MCP server (`auto-ride-domain`) ships 8 tools backed by 4 new tables (`vehicles`, `customers`, `trips`, `invoices`).
 
+14. **Phase 11 — Auth (Better Auth + middleware + SSE token).** Every dashboard route is now session-gated. A signed-out visitor sees only `/login`, `/register`, and `/health`. The 11-agent flow, the kanban, the chat ingest, the billing/map/memories surfaces — all require an active Better Auth session.
+
+    **One-time setup** on a fresh clone (or worktree):
+
+    1. Add three secrets to `.env.local`. Generate the two HMAC secrets via Node (no openssl needed on Windows):
+       ```bash
+       node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+       ```
+       Run twice, paste each 64-char output into `.env.local`:
+       ```
+       BETTER_AUTH_SECRET=<first hex output>
+       BETTER_AUTH_URL=http://localhost:3100
+       SSE_TOKEN_SECRET=<second hex output>
+       # BETTER_AUTH_SIGNUP_DISABLED=1   # optional kill-switch on /register
+       ```
+    2. Migrate (adds `user`, `session`, `account`, `verification` tables + `customers.user_id`):
+       ```bash
+       pnpm db:migrate
+       ```
+    3. Start the dev server (still port 3100), visit `/register`, create an operator account, and you're in.
+
+    **Forgot a dev password?** Reset directly in the DB without an email flow:
+    ```bash
+    pnpm auth:reset-password you@example.com new-password-12345
+    ```
+
+    **What auth covers:**
+
+    | Boundary | Mechanism |
+    |---|---|
+    | All dashboard pages | `middleware.ts` redirects unauth requests to `/login`, then `(dashboard)/layout.tsx` calls `requireSession()` for the real DB check |
+    | `/api/tasks` POST + `/api/dashboard/*` + `/api/{vehicles,invoices,trips}` | Per-handler `auth.api.getSession({ headers: req.headers })` returning 401 if missing |
+    | `/api/tasks/[id]/stream` (EventSource) | 60-second HMAC-signed `?token=` query param (EventSource can't send custom headers); client auto-refreshes via `/stream-token` on `onerror` |
+    | `/api/inngest` (signed by Inngest CLI) | Public — protected by Inngest's own signing key |
+    | `/health` | Public for load-balancer/uptime probes |
+    | Identity in chat | `app/(dashboard)/chat/actions.ts` reads `session.user.email`; the body's `customer_email` is ignored |
+
+    **Phase 11 PR scope also includes** a baseline cleanup commit that fixes 39 phase 10/10.5 typecheck errors and 13 pre-existing test failures (Collapsible-default-closed in the timeline renderers, missing TooltipProvider in widget tests, etc.) — see commit log.
+
 ## Scripts
 
 | Script | Purpose |
@@ -300,6 +339,7 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm query:demo` | First real `query()`: orchestrator + fleet-analyst subagent + memory MCP + task_events persistence, CLI-driven. Accepts a prompt as argv. Requires Anthropic auth (see quickstart step 7). (phase 05) |
 | `pnpm cleanup:run-once` | Sends `auto-ride/cleanup.requested`; Inngest dev server invokes `memoryCleanupFn` once. Watch the run in the Inngest UI at [http://localhost:8288](http://localhost:8288). (phase 09) |
 | `pnpm seed:domain` | Seed 19-vehicle fleet + 25 customers + ~95 historical trips/invoices (phase 10.5) |
+| `pnpm auth:reset-password <email> <new-password>` | Reset a Better Auth user's password directly via the DB (phase 11) |
 
 ## Phase status
 

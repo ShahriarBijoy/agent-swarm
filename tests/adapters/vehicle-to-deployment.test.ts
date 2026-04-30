@@ -57,9 +57,9 @@ describe('vehicleToDeploymentData', () => {
     expect(data.status).toBe('Building');
     expect(data.commitMessage).toBe('Group of 5 → Cape Cod, 612km');
     expect(data.commitHash).toBe('d4f1e2a');
-    expect(data.steps[1].status).toBe('loading');
-    expect(data.steps[1].progress).toBeGreaterThan(0);
-    expect(data.steps[1].progress).toBeLessThan(1);
+    expect(data.steps[1]!.status).toBe('loading');
+    expect(data.steps[1]!.progress).toBeGreaterThan(0);
+    expect(data.steps[1]!.progress).toBeLessThan(1);
   });
 
   it('maps maintenance status to Error', () => {
@@ -67,6 +67,6 @@ describe('vehicleToDeploymentData', () => {
       vehicle: { ...SEDAN, status: 'maintenance' },
     });
     expect(data.status).toBe('Error');
-    expect(data.steps[0].status).toBe('error');
+    expect(data.steps[0]!.status).toBe('error');
   });
 });

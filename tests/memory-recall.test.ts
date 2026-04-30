@@ -127,11 +127,14 @@ skipSuite('phase-03 memory-recall integration', () => {
   });
 
   it('EXPLAIN shows the HNSW index in use', async () => {
-    // With tiny test data the planner prefers a bitmap scan on the smaller btree;
-    // disable seq + bitmap scans in a transaction so the HNSW index is chosen.
+    // With tiny test data the planner prefers an Index Scan on the smaller
+    // decay btree + an explicit Sort node. Disable seq/bitmap scans AND
+    // disable sort so the only viable plan is an HNSW Index Scan (HNSW
+    // returns rows already ordered by `<=>` distance, no Sort needed).
     const planJson = await rawSql.begin(async (sql) => {
       await sql`SET LOCAL enable_seqscan = OFF`;
       await sql`SET LOCAL enable_bitmapscan = OFF`;
+      await sql`SET LOCAL enable_sort = OFF`;
       const qv = basisPerturbed(0, 0, 0.001);
       const rows = await sql<{ 'QUERY PLAN': unknown }[]>`
         EXPLAIN (FORMAT JSON)

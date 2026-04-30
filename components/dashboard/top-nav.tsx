@@ -1,6 +1,8 @@
 'use client';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
+import { useState } from 'react';
+import { authClient } from '@/lib/auth/client';
 
 type NavItem = { label: string; href: string; match: (path: string) => boolean };
 
@@ -14,10 +16,25 @@ const NAV: NavItem[] = [
   { label: 'Memories', href: '/memories', match: (p) => p === '/memories' },
 ];
 
-export function TopNav() {
+export function TopNav({
+  user,
+}: {
+  user?: { email: string; name?: string | null };
+}) {
   const pathname = usePathname() ?? '/';
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
+
+  async function handleSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    await authClient.signOut();
+    router.push('/login');
+    router.refresh();
+  }
+
   return (
-    <header className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-2 pb-5">
+    <header className="sticky top-3 z-40 mb-5 grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/80 px-4 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] backdrop-blur-md supports-[backdrop-filter]:bg-[var(--color-surface)]/65">
       <Link href="/" className="flex items-center gap-2.5">
         <div className="grid h-[22px] w-[22px] place-items-center rounded-[4px] bg-[var(--color-ink)] font-display text-[14px] text-[var(--color-lime)]">A</div>
         <span className="text-[16px] font-semibold tracking-tight">
@@ -45,9 +62,28 @@ export function TopNav() {
         })}
       </nav>
 
-      <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--color-ink)] font-mono text-[14px] text-[var(--color-surface)]" aria-hidden>
-        ⌘
-      </div>
+      {user ? (
+        <div className="flex items-center gap-2">
+          <span
+            className="hidden max-w-[180px] truncate font-mono text-[11px] text-[var(--color-muted)] sm:inline"
+            title={user.email}
+          >
+            {user.email}
+          </span>
+          <button
+            type="button"
+            onClick={handleSignOut}
+            disabled={signingOut}
+            className="rounded-full border border-[var(--color-line-strong)] px-3 py-1.5 text-[12px] font-medium text-[var(--color-muted)] transition-colors hover:bg-black/5 hover:text-[var(--color-ink)] disabled:opacity-50"
+          >
+            {signingOut ? 'Signing out…' : 'Sign out'}
+          </button>
+        </div>
+      ) : (
+        <div className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--color-ink)] font-mono text-[14px] text-[var(--color-surface)]" aria-hidden>
+          ⌘
+        </div>
+      )}
     </header>
   );
 }

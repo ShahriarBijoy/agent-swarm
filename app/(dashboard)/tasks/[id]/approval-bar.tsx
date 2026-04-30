@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import type { GateSummary } from '@/db/queries/approval-gates';
 import type { ApprovalRequestPayload } from '@/components/timeline/types';
 import { ApprovalCard } from './approval-card';
+import { openTaskEventSource } from '@/lib/auth/sse-client';
 
 /**
  * Floating bar above the timeline that surfaces every pending gate for
@@ -16,42 +17,59 @@ import { ApprovalCard } from './approval-card';
  */
 export function ApprovalBar({
   taskId,
+  sseToken,
   initialGates,
 }: {
   taskId: string;
+  sseToken: string;
   initialGates: GateSummary[];
 }) {
   const [gates, setGates] = useState<GateSummary[]>(initialGates);
 
   useEffect(() => {
-    const es = new EventSource(`/api/tasks/${taskId}/stream`);
-    const handle = (e: MessageEvent) => {
-      const ev = safeParse(e.data);
-      if (!ev || ev.type !== 'approval_request') return;
-      const payload = ev.payload as unknown as ApprovalRequestPayload;
-      if (!payload || typeof payload !== 'object') return;
-      if (payload.subtype === 'opened') {
-        setGates((prev) => {
-          if (prev.some((g) => g.id === payload.gate_id)) return prev;
-          const summary: GateSummary = {
-            id: payload.gate_id,
-            runId: '',
-            taskId,
-            toolName: payload.tool_name,
-            proposedInput: payload.proposed_input,
-            status: 'pending',
-            createdAt: new Date(),
-          };
-          return [...prev, summary];
-        });
-      } else if (payload.subtype === 'resolved') {
-        setGates((prev) => prev.filter((g) => g.id !== payload.gate_id));
-      }
+    let closed = false;
+    const handle = openTaskEventSource(taskId, sseToken, {
+      events: {
+        task_event: (e: MessageEvent) => {
+          const ev = safeParse(e.data);
+          if (!ev || ev.type !== 'approval_request') return;
+          const payload = ev.payload as unknown as ApprovalRequestPayload;
+          if (!payload || typeof payload !== 'object') return;
+          if (payload.subtype === 'opened') {
+            setGates((prev) => {
+              if (prev.some((g) => g.id === payload.gate_id)) return prev;
+              const summary: GateSummary = {
+                id: payload.gate_id,
+                runId: '',
+                taskId,
+                toolName: payload.tool_name,
+                proposedInput: payload.proposed_input,
+                status: 'pending',
+                createdAt: new Date(),
+              };
+              return [...prev, summary];
+            });
+          } else if (payload.subtype === 'resolved') {
+            setGates((prev) =>
+              prev.filter((g) => g.id !== payload.gate_id),
+            );
+          }
+        },
+        done: () => {
+          if (!closed) {
+            closed = true;
+            handle.close();
+          }
+        },
+      },
+      onFatal: (err) =>
+        console.error('[approval-bar] sse refresh failed:', err),
+    });
+    return () => {
+      closed = true;
+      handle.close();
     };
-    es.addEventListener('task_event', handle as EventListener);
-    es.addEventListener('done', () => es.close());
-    return () => es.close();
-  }, [taskId]);
+  }, [taskId, sseToken]);
 
   if (gates.length === 0) return null;
 

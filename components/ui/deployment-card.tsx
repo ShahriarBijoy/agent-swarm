@@ -171,15 +171,16 @@ export const DeploymentCard: React.FC<{ data: DeploymentData }> = ({
 
         if (activeStepIndex !== -1) {
           const step = { ...newSteps[activeStepIndex] };
-          if (step.progress < 1) {
+          const currentProgress = step.progress ?? 0;
+          if (currentProgress < 1) {
             step.status = 'loading';
-            step.progress += 0.05;
-            step.duration = `${Math.floor(step.progress * 10)}s`;
+            step.progress = currentProgress + 0.05;
+            step.duration = `${Math.floor((step.progress ?? 0) * 10)}s`;
           } else {
             step.progress = 1;
             step.status = 'success';
           }
-          newSteps[activeStepIndex] = step;
+          newSteps[activeStepIndex] = step as DeploymentStep;
 
           const allDone = newSteps.every(
             (s) => s.status === 'success' || s.metrics,

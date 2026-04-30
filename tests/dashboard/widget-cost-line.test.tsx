@@ -2,6 +2,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
 import { CostLine12Mo } from '@/components/dashboard/widgets/cost-line-12mo';
+import { CostLine12MoFooter } from '@/components/dashboard/widgets/cost-line-12mo-view';
 
 // jsdom doesn't ship `ResizeObserver`, but Recharts' `ResponsiveContainer`
 // references it the moment its module finishes loading via `next/dynamic`.
@@ -27,7 +28,15 @@ const FX = {
 
 describe('<CostLine12Mo />', () => {
   it('renders the daily-spend headline number', () => {
-    const { getByText } = render(<CostLine12Mo data={FX} />);
+    // The "Avg daily spend" headline lives in the widget's Footer slot, not
+    // in <CostLine12Mo /> itself. Render both so the assertion mirrors what
+    // the dashboard actually composes via WidgetDef.{Component, Footer}.
+    const { getByText } = render(
+      <>
+        <CostLine12Mo data={FX} />
+        <CostLine12MoFooter data={FX} />
+      </>,
+    );
     expect(getByText(/Avg daily spend/i)).toBeTruthy();
   });
   it('renders a placeholder div before the chart hydrates', () => {

@@ -25,6 +25,8 @@ import { ApprovalBar } from './approval-bar';
 import { CanvasView } from './canvas-view';
 import { TaskTabs, type TaskView } from './task-tabs';
 import { TimelineStream } from './timeline-stream';
+import { requireSession } from '@/lib/auth/require-session';
+import { signSseToken } from '@/lib/auth/sse-token';
 
 export const dynamic = 'force-dynamic';
 
@@ -74,8 +76,13 @@ export default async function TaskPage({
   const { id } = await params;
   const { view: viewParam } = await searchParams;
   const view: TaskView = viewParam === 'stream' ? 'stream' : 'canvas';
+  const session = await requireSession();
   const task = await getTaskById(id);
   if (!task) notFound();
+
+  // Mint a 60s SSE token for the EventSource clients on this page.
+  // Each client refreshes via /api/tasks/[id]/stream-token on expiry.
+  const sseToken = signSseToken({ taskId: task.id, userId: session.user.id });
 
   const [rows, pendingGatesRaw] = await Promise.all([
     getEventsSince({ taskId: id, afterId: 0n, limit: 500 }),
@@ -95,7 +102,7 @@ export default async function TaskPage({
       : null;
 
   return (
-    <main className="mx-auto flex max-w-3xl flex-col gap-4 p-6">
+    <main className="mx-auto flex max-w-5xl flex-col gap-4 p-6">
       <nav className="text-xs">
         <Link
           href="/tasks"
@@ -127,7 +134,11 @@ export default async function TaskPage({
             <p className="font-mono text-xs text-muted-foreground">{task.id}</p>
           </header>
 
-          <ApprovalBar taskId={task.id} initialGates={initialGates} />
+          <ApprovalBar
+            taskId={task.id}
+            sseToken={sseToken}
+            initialGates={initialGates}
+          />
 
           <TaskTabs
             initialView={view}
@@ -137,11 +148,13 @@ export default async function TaskPage({
                 startedAt={startedAt}
                 endedAt={endedAt}
                 taskId={task.id}
+                sseToken={sseToken}
               />
             }
             streamSlot={
               <TimelineStream
                 taskId={task.id}
+                sseToken={sseToken}
                 initialEvents={initialEvents}
                 initialTerminal={initialTerminal}
               />

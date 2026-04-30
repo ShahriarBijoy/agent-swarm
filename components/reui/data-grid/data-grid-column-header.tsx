@@ -196,7 +196,7 @@ function DataGridColumnHeaderInner<TData, TValue>({
           onClick={() => {
             if (columnIndex > 0) {
               const newOrder = [...columnOrder]
-              const [movedColumn] = newOrder.splice(columnIndex, 1)
+              const [movedColumn] = newOrder.splice(columnIndex, 1) as [string]
               newOrder.splice(columnIndex - 1, 0, movedColumn)
               table.setColumnOrder(newOrder)
             }
@@ -211,7 +211,7 @@ function DataGridColumnHeaderInner<TData, TValue>({
           onClick={() => {
             if (columnIndex < columnOrder.length - 1) {
               const newOrder = [...columnOrder]
-              const [movedColumn] = newOrder.splice(columnIndex, 1)
+              const [movedColumn] = newOrder.splice(columnIndex, 1) as [string]
               newOrder.splice(columnIndex + 1, 0, movedColumn)
               table.setColumnOrder(newOrder)
             }

@@ -9,18 +9,20 @@ export function ChatForm({
   defaultEmail,
   action,
 }: {
-  defaultEmail?: string;
+  defaultEmail: string;
   action: (fd: FormData) => Promise<void>;
 }) {
   return (
     <form action={action} className="space-y-4">
-      {defaultEmail && (
-        <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-600 dark:bg-[#161617] dark:text-[#999]">
-          Replying as:{' '}
-          <span className="font-mono">{defaultEmail}</span>
-          <input type="hidden" name="customer_email" value={defaultEmail} />
-        </div>
-      )}
+      {/*
+        Phase 11 — no hidden `customer_email` field. The server action reads
+        the email from the Better Auth session itself; passing it via a
+        form input would let a tampered request override the actual
+        signed-in user. The pill below is purely informational.
+      */}
+      <div className="inline-flex items-center gap-2 rounded-full bg-neutral-100 px-3 py-1 text-xs text-neutral-600 dark:bg-[#161617] dark:text-[#999]">
+        Replying as: <span className="font-mono">{defaultEmail}</span>
+      </div>
       <textarea
         name="prompt"
         rows={4}

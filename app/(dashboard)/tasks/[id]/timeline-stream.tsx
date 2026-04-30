@@ -24,9 +24,11 @@ import type {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Spinner } from '@/components/ui/spinner';
 import { cn } from '@/lib/utils';
+import { openTaskEventSource } from '@/lib/auth/sse-client';
 
 export type TimelineStreamProps = {
   taskId: string;
+  sseToken: string;
   initialEvents: TimelineEvent[];
   initialTerminal: TerminalSummary | null;
 };
@@ -121,6 +123,7 @@ function formatClock(iso: string): string {
 
 export function TimelineStream({
   taskId,
+  sseToken,
   initialEvents,
   initialTerminal,
 }: TimelineStreamProps) {
@@ -135,41 +138,43 @@ export function TimelineStream({
   useEffect(() => {
     if (terminal) return; // task already finished; no stream needed
 
-    const es = new EventSource(`/api/tasks/${taskId}/stream`);
-
-    const onTaskEvent = (e: MessageEvent) => {
-      try {
-        const ev = JSON.parse(e.data) as TimelineEvent;
-        if (ev.id <= lastIdRef.current) return;
-        lastIdRef.current = ev.id;
-        setEvents((prev) => [...prev, ev]);
-      } catch (err) {
-        console.error('[timeline-stream] failed to parse task_event:', err);
-      }
-    };
-
-    const onDone = (e: MessageEvent) => {
-      try {
-        const payload = JSON.parse(e.data) as TerminalSummary;
-        setTerminal(payload);
-      } catch {
-        setTerminal({ status: 'done' });
-      }
-      es.close();
-    };
-
-    es.addEventListener('task_event', onTaskEvent);
-    es.addEventListener('done', onDone);
-    es.onerror = () => {
-      // EventSource auto-reconnects with Last-Event-ID; no action needed.
-    };
+    let closed = false;
+    const handle = openTaskEventSource(taskId, sseToken, {
+      events: {
+        task_event: (e: MessageEvent) => {
+          try {
+            const ev = JSON.parse(e.data) as TimelineEvent;
+            if (ev.id <= lastIdRef.current) return;
+            lastIdRef.current = ev.id;
+            setEvents((prev) => [...prev, ev]);
+          } catch (err) {
+            console.error('[timeline-stream] failed to parse task_event:', err);
+          }
+        },
+        done: (e: MessageEvent) => {
+          try {
+            const payload = JSON.parse(e.data) as TerminalSummary;
+            setTerminal(payload);
+          } catch {
+            setTerminal({ status: 'done' });
+          }
+          if (!closed) {
+            closed = true;
+            handle.close();
+          }
+        },
+      },
+      onFatal: (err) =>
+        console.error('[timeline-stream] sse refresh failed:', err),
+    });
 
     return () => {
-      es.removeEventListener('task_event', onTaskEvent);
-      es.removeEventListener('done', onDone);
-      es.close();
+      closed = true;
+      handle.close();
     };
-  }, [taskId, terminal]);
+    // sseToken is intentionally a hint — the helper handles refresh — but we
+    // include it so a fresh page render with a new token re-opens cleanly.
+  }, [taskId, sseToken, terminal]);
 
   // Mark every received event as completed when the task is terminal; while
   // streaming, keep the most recent event "active" (spinner) so the live

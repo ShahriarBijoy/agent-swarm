@@ -20,7 +20,7 @@ export function ToolResult({
 
   return (
     <div data-type="tool_result" data-tool-use-id={toolUseId}>
-      <Tool defaultOpen={false} className="mb-0">
+      <Tool defaultOpen={true} className="mb-0">
         <ToolHeader
           type="dynamic-tool"
           toolName="result"

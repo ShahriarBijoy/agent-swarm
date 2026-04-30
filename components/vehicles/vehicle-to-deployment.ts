@@ -89,7 +89,7 @@ function makeSteps(args: {
     progress: 0,
     duration: '—',
   };
-  const labels = ['Pickup', 'In-route', 'Drop-off', 'Return'];
+  const labels = ['Pickup', 'In-route', 'Drop-off', 'Return'] as const;
   if (args.vehicle.status === 'maintenance') {
     return [
       { ...empty, id: 'pickup', label: labels[0], status: 'error', duration: 'service' },
