@@ -275,7 +275,7 @@ export function useDateSelector({
   const effectiveFilterType = presetMode ?? value?.operator ?? defaultFilterType
 
   const [periodType, setPeriodType] = useState<DateSelectorPeriodType>(
-    value?.period || validDefaultPeriodType
+    value?.period || validDefaultPeriodType || "day"
   )
   const [filterType, setFilterType] =
     useState<DateSelectorFilterType>(effectiveFilterType)
@@ -806,14 +806,14 @@ function DateSelectorDayPicker({
 
   // Create custom formatters for i18n
   const formatters = {
-    formatWeekdayName: (date: Date) => {
+    formatWeekdayName: (date: Date): string => {
       const dayIndex = date.getDay()
-      return i18n.weekdaysShort[dayIndex] || i18n.weekdays[dayIndex]
+      return i18n.weekdaysShort[dayIndex] || i18n.weekdays[dayIndex] || ""
     },
-    formatMonthCaption: (date: Date) => {
+    formatMonthCaption: (date: Date): string => {
       const monthIndex = date.getMonth()
       const year = date.getFullYear()
-      return `${i18n.months[monthIndex]} ${year}`
+      return `${i18n.months[monthIndex] ?? ""} ${year}`
     },
   }
 
@@ -1138,7 +1138,7 @@ export function DateSelector({
       // Try parsing as quarter (e.g., "Q4", "Q1 2025")
       const quarterMatch = trimmed.match(/^Q([1-4])(?:\s+(\d{4}))?$/i)
       if (quarterMatch) {
-        const quarter = parseInt(quarterMatch[1]) - 1
+        const quarter = parseInt(quarterMatch[1]!) - 1
         const year = quarterMatch[2]
           ? parseInt(quarterMatch[2])
           : new Date().getFullYear()

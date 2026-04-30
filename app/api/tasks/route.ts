@@ -36,7 +36,7 @@ export async function POST(req: Request): Promise<Response> {
         .where(eq(customers.email, email));
       if (!existing) {
         await db.insert(customers).values({
-          name: email.split('@')[0],
+          name: email.split('@')[0] ?? email,
           email,
         });
       }

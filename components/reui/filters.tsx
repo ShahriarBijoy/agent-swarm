@@ -623,10 +623,10 @@ const getOperatorsForField = <T = unknown,>(
 
   // If it's a multiselect field or has multiselect operators, use multiselect operators
   if (fieldType === "multiselect" || field.type === "multiselect") {
-    return operators.multiselect
+    return operators.multiselect ?? []
   }
 
-  return operators[fieldType] || operators.select
+  return operators[fieldType] ?? operators.select ?? []
 }
 
 interface FilterOperatorDropdownProps<T = unknown> {
@@ -977,7 +977,7 @@ function SelectOptionsPopover<T = unknown>({
                   </div>
                 )}
                 {selectedOptions.length === 1
-                  ? selectedOptions[0].label
+                  ? selectedOptions[0]!.label
                   : selectedOptions.length > 1
                     ? `${selectedOptions.length} ${context.i18n.selectedCount}`
                     : context.i18n.select}
@@ -1640,7 +1640,7 @@ export function Filters<T = unknown>({
                         } else if (e.key === "Enter" && highlightedIndex >= 0) {
                           e.preventDefault()
                           const field = filteredFields[highlightedIndex]
-                          if (field.key) {
+                          if (field?.key) {
                             const hasSubMenu =
                               (field.type === "select" ||
                                 field.type === "multiselect") &&
