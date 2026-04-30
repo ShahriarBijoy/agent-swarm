@@ -43,6 +43,15 @@ export async function createScenarioTask(formData: FormData) {
       }),
     },
   );
-  const body = await res.json();
-  redirect(`/tasks/${body.taskId}`);
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok || typeof body.taskId !== 'string') {
+    const detail =
+      typeof body.message === 'string'
+        ? body.message
+        : typeof body.error === 'string'
+          ? body.error
+          : `task creation failed (${res.status})`;
+    throw new Error(detail);
+  }
+  redirect(`/chat/${body.taskId}`);
 }
