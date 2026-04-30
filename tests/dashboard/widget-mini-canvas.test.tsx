@@ -6,6 +6,6 @@ import { MiniCanvas } from '@/components/dashboard/widgets/mini-canvas';
 describe('<MiniCanvas />', () => {
   it('renders empty state when data=null', () => {
     const { getByText } = render(<MiniCanvas data={null} />);
-    expect(getByText(/no active run/i)).toBeTruthy();
+    expect(getByText(/no swarm runs yet/i)).toBeTruthy();
   });
 });

@@ -85,7 +85,7 @@ describe('phase-06 TimelineEventRenderer', () => {
         })}
       />,
     );
-    expect(html).toContain('error');
+    expect(html).toContain('Error');
     expect(html).toContain('oh no');
   });
 
@@ -148,7 +148,7 @@ describe('phase-06 TimelineEventRenderer', () => {
         })}
       />,
     );
-    expect(html).toContain('awaiting approval');
+    expect(html).toContain('Awaiting Approval');
     expect(html).toContain('Bash');
     expect(html).toContain('Non-whitelisted Bash');
     expect(html).toContain('gate-aaaa-1111');

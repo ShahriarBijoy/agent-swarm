@@ -50,7 +50,7 @@ function ApprovalOpened({
       data-subtype="opened"
       data-gate-id={payload.gate_id}
     >
-      <Tool defaultOpen={false} className="mb-0">
+      <Tool defaultOpen={true} className="mb-0">
         <ToolHeader
           type="dynamic-tool"
           toolName={payload.tool_name}
@@ -83,7 +83,7 @@ function ApprovalResolved({
       data-subtype="resolved"
       data-gate-id={payload.gate_id}
     >
-      <Tool defaultOpen={false} className="mb-0">
+      <Tool defaultOpen={true} className="mb-0">
         <ToolHeader
           type="dynamic-tool"
           toolName={payload.decision}

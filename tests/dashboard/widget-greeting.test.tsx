@@ -25,16 +25,11 @@ describe('<Greeting />', () => {
 
   it('renders the operator name from process.env.OPERATOR_NAME', () => {
     process.env.OPERATOR_NAME = 'Shahriar';
-    const { getByText } = render(<Greeting data={FIXTURE_GREETING} />);
-    // Match across the multi-text-node headline by scoping to the <h2> tag —
-    // textContent on ancestors (<body>, wrapper <div>s) also contains the
-    // substring, so getByText would otherwise see multiple matches.
-    expect(
-      getByText(
-        (_, node) =>
-          node?.tagName === 'H2' &&
-          (node?.textContent?.includes('Hi Shahriar,') ?? false),
-      ),
-    ).toBeTruthy();
+    const { container } = render(<Greeting data={FIXTURE_GREETING} />);
+    // The headline is a multi-text-node h2 (it nests an italic span); use a
+    // direct querySelector + textContent assertion so testing-library's
+    // ancestor-walk doesn't flag the body/div wrappers as duplicate matches.
+    const h2 = container.querySelector('h2');
+    expect(h2?.textContent).toContain('Hi Shahriar,');
   });
 });

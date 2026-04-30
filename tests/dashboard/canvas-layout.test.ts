@@ -78,13 +78,17 @@ describe('layoutCanvas', () => {
     expect(billing?.data.gate?.gateId).toBe('g-1');
   });
 
-  it('respects the asOf cursor (events after cursor are ignored)', () => {
+  it('keeps node topology stable across the asOf cursor (state-only filter)', () => {
+    // canvas-layout.ts:52-59 documents the intentional split: topology comes
+    // from the FULL events list so React Flow doesn't re-mount worker nodes
+    // mid-replay (which would drop edges between dispatcher and the worker).
+    // The cursor only gates STATE — i.e. whether a node is queued/active/done.
     const events: TaskEvent[] = [
       ev(1, 'tool_call', { agent_name: 'dispatcher', tool_name: 'Agent', tool_input: { subagent_type: 'billing' } }),
       ev(2, 'tool_call', { agent_name: 'dispatcher', tool_name: 'Agent', tool_input: { subagent_type: 'fleet-analyst' } }),
     ];
     const cursor = events[0]!.createdAt.getTime();
     const out = layoutCanvas(events, cursor);
-    expect(out.nodes.map((n) => n.id).sort()).toEqual(['billing', 'dispatcher']);
+    expect(out.nodes.map((n) => n.id).sort()).toEqual(['billing', 'dispatcher', 'fleet-analyst']);
   });
 });
