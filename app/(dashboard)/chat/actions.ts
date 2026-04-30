@@ -2,23 +2,25 @@
 
 import { redirect } from 'next/navigation';
 import { headers } from 'next/headers';
+import { revalidatePath } from 'next/cache';
 import { requireSession } from '@/lib/auth/require-session';
 
-// Phase 11 — Server action that posts to /api/tasks.
+// Phase 11.5 — Server action that posts to /api/tasks. Now conversation-aware:
+//   - Empty `conversationId` → create a fresh conversation, redirect to it.
+//   - Present `conversationId` → append a follow-up turn to the same thread.
 //
-// Two phase-11 changes:
-//   1. requireSession() up front so an unauthenticated submit can't even
-//      try to create a task (defense in depth — middleware already
-//      redirects, but the action shouldn't depend on that).
-//   2. Forward the session cookie on the internal fetch to /api/tasks.
-//      Server-side fetch does NOT inherit incoming cookies by default;
-//      we have to copy the `cookie` header through, otherwise the route
-//      handler's auth.api.getSession() sees no session and returns 401.
+// Auth and cookie-forward identical to phase 11 (server-side fetch doesn't
+// inherit cookies, so we copy the `cookie` header through). The route handler
+// is the source of truth for conversation ownership and busy-state checks;
+// we just translate its responses into UX outcomes.
 
 export async function createScenarioTask(formData: FormData) {
   const session = await requireSession();
   const prompt = String(formData.get('prompt') ?? '').trim();
   if (!prompt) return;
+
+  const conversationIdRaw = String(formData.get('conversationId') ?? '').trim();
+  const conversationId = conversationIdRaw.length > 0 ? conversationIdRaw : undefined;
 
   const cookie = (await headers()).get('cookie') ?? '';
 
@@ -36,14 +38,21 @@ export async function createScenarioTask(formData: FormData) {
       body: JSON.stringify({
         kind: 'scenario',
         prompt,
-        // The route handler overwrites this with session.user.email anyway,
-        // but sending it keeps the existing body schema happy and gives
-        // server logs a tidy "[scenario] customer_email=…" line.
         customer_email: session.user.email,
+        ...(conversationId ? { conversationId } : {}),
       }),
     },
   );
   const body = await res.json().catch(() => ({}));
+
+  // Surface conversation_busy as a friendly redirect back to the active
+  // conversation rather than throwing — the UI can poll the latest task and
+  // the user sees the previous reply finish.
+  if (res.status === 409 && body.error === 'conversation_busy' && conversationId) {
+    revalidatePath(`/chat/${conversationId}`);
+    redirect(`/chat/${conversationId}`);
+  }
+
   if (!res.ok || typeof body.taskId !== 'string') {
     const detail =
       typeof body.message === 'string'
@@ -53,5 +62,19 @@ export async function createScenarioTask(formData: FormData) {
           : `task creation failed (${res.status})`;
     throw new Error(detail);
   }
-  redirect(`/chat/${body.taskId}`);
+
+  const targetConversationId =
+    typeof body.conversationId === 'string'
+      ? body.conversationId
+      : conversationId;
+
+  if (targetConversationId) {
+    revalidatePath('/chat');
+    revalidatePath(`/chat/${targetConversationId}`);
+    redirect(`/chat/${targetConversationId}`);
+  }
+
+  // Defensive fallback: no conversation came back (shouldn't happen on
+  // scenario flow), drop the user on the per-task view.
+  redirect(`/tasks/${body.taskId}`);
 }
