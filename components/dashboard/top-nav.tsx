@@ -34,7 +34,7 @@ export function TopNav({
   }
 
   return (
-    <header className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-2 pb-5">
+    <header className="sticky top-3 z-40 mb-5 grid grid-cols-[auto_1fr_auto] items-center gap-4 rounded-full border border-[var(--color-line)] bg-[var(--color-surface)]/80 px-4 py-2 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.18)] backdrop-blur-md supports-[backdrop-filter]:bg-[var(--color-surface)]/65">
       <Link href="/" className="flex items-center gap-2.5">
         <div className="grid h-[22px] w-[22px] place-items-center rounded-[4px] bg-[var(--color-ink)] font-display text-[14px] text-[var(--color-lime)]">A</div>
         <span className="text-[16px] font-semibold tracking-tight">
