@@ -4,4 +4,6 @@ export * from './memories';
 export * from './cleanup';
 export * from './tasks';
 export * from './approvals';
+// auth must come before domain — customers.user_id FK references user.id.
+export * from './auth';
 export * from './domain';
