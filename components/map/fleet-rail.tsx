@@ -71,7 +71,8 @@ export function FleetRail({
         </span>
       </div>
 
-      <ScrollArea className="flex-1">
+      <div className="min-h-0 flex-1">
+        <ScrollArea className="h-full" type="hover">
         {grouped.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-[var(--color-muted)]">
             No vehicles match this filter.
@@ -168,7 +169,8 @@ export function FleetRail({
             </section>
           ))
         )}
-      </ScrollArea>
+        </ScrollArea>
+      </div>
 
     </aside>
   );
