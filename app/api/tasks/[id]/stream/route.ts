@@ -9,6 +9,7 @@ import {
   formatTerminal,
   type TerminalStatus,
 } from '@/lib/sse/encode';
+import { verifySseToken } from '@/lib/auth/sse-token';
 
 export const dynamic = 'force-dynamic';
 
@@ -50,6 +51,19 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ): Promise<Response> {
   const { id: taskId } = await params;
+
+  // Phase 11 — gate the stream behind the HMAC token in `?token=`.
+  // Cookies aren't sent reliably by EventSource (no custom headers, varies
+  // across browsers cross-origin), so the page server-mints a 60s token via
+  // signSseToken, the client appends it to the URL, and we check it here
+  // before opening the stream. Fresh tokens come from /stream-token
+  // (session-cookie-gated) on EventSource onerror reconnects.
+  const url = new URL(req.url);
+  const verified = verifySseToken(url.searchParams.get('token'), { taskId });
+  if (!verified) {
+    return new Response('unauthorized', { status: 401 });
+  }
+
   const startCursor = parseLastEventId(req.headers.get('Last-Event-ID'));
 
   const enc = new TextEncoder();
