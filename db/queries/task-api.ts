@@ -35,6 +35,8 @@ export type CreateQueuedTaskArgs = {
   maxTurns?: number;
   createdBy?: string;
   metadata?: Record<string, unknown>;
+  /** Phase 11.5 — link this task to a chat conversation thread. */
+  conversationId?: string;
 };
 
 export async function createQueuedTask(
@@ -51,6 +53,9 @@ export async function createQueuedTask(
         : {}),
       ...(args.maxTurns !== undefined ? { maxTurns: args.maxTurns } : {}),
       ...(args.metadata !== undefined ? { metadata: args.metadata } : {}),
+      ...(args.conversationId !== undefined
+        ? { conversationId: args.conversationId }
+        : {}),
     })
     .returning({ id: tasks.id, createdAt: tasks.createdAt });
   if (!row) throw new Error('createQueuedTask: insert returned no row');

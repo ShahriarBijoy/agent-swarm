@@ -15,6 +15,10 @@ export const createTaskBodySchema = z.object({
   maxTurns: z.number().int().min(1).max(100).optional(),
   kind: z.enum(['default', 'scenario']).default('default'),
   customer_email: z.string().email().optional(),
+  // Phase 11.5 — when present, the new task is linked to an existing chat
+  // thread. The route handler verifies the conversation belongs to the
+  // signed-in user and stitches prior turns into the prompt before dispatch.
+  conversationId: z.string().uuid().optional(),
 });
 
 export type CreateTaskBody = z.infer<typeof createTaskBodySchema>;

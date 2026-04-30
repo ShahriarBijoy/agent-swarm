@@ -6,8 +6,22 @@ import { db } from '@/db/client';
 import { customers } from '@/db/schema/domain';
 import { eq, and, isNull } from 'drizzle-orm';
 import { auth } from '@/lib/auth/server';
+import {
+  createConversation,
+  getConversationById,
+  getLatestTaskInConversation,
+  setConversationTitle,
+  touchConversation,
+} from '@/db/queries/conversations';
+import { buildConversationContext } from '@/lib/runner/conversation-context';
 
 export const dynamic = 'force-dynamic';
+
+const ACTIVE_TASK_STATUSES = new Set([
+  'queued',
+  'in_progress',
+  'awaiting_approval',
+]);
 
 async function safeJson(req: Request): Promise<unknown> {
   try {
@@ -33,13 +47,55 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 
+  const email = session.user.email;
+  let conversationId: string | undefined = parsed.data.conversationId;
+  let isFollowUp = false;
+
+  // Phase 11.5 — chat conversation flow. The chat surface always operates
+  // in `kind: 'scenario'` because the dispatcher's customer_email prefix is
+  // what makes the rental tools work. CLI / smoke-test callers leave
+  // conversationId empty and we keep the legacy single-shot semantics.
+  if (parsed.data.kind === 'scenario') {
+    if (conversationId) {
+      const convo = await getConversationById(conversationId);
+      if (!convo) {
+        return Response.json(
+          { error: 'conversation_not_found' },
+          { status: 404 },
+        );
+      }
+      if (convo.userId !== session.user.id) {
+        return Response.json({ error: 'forbidden' }, { status: 403 });
+      }
+      // Don't allow stacking turns on top of a still-running one — the SDK
+      // would interleave or, worse, the prior task's tail events would show
+      // up in the next run's stream window. Reject with a clear status so
+      // the UI can show "wait for the current reply to finish".
+      const latest = await getLatestTaskInConversation(conversationId);
+      if (latest && ACTIVE_TASK_STATUSES.has(latest.status)) {
+        return Response.json(
+          {
+            error: 'conversation_busy',
+            message: 'previous turn is still running',
+            taskId: latest.id,
+          },
+          { status: 409 },
+        );
+      }
+      isFollowUp = true;
+    } else {
+      const created = await createConversation({
+        userId: session.user.id,
+        customerEmail: email,
+        // Title is set after the first prompt is known (below).
+      });
+      conversationId = created.id;
+    }
+  }
+
   let prefixedPrompt = parsed.data.prompt;
   if (parsed.data.kind === 'scenario') {
     // Phase 11 — derive the customer's email from the SESSION, not the body.
-    // Body field is ignored (we accept it for backwards compat with curl
-    // smoke tests but never trust it). The customer row is upserted by
-    // email, then linked to the operator's user_id on first contact.
-    const email = session.user.email;
     const [existing] = await db
       .select()
       .from(customers)
@@ -56,7 +112,16 @@ export async function POST(req: Request): Promise<Response> {
         .set({ userId: session.user.id })
         .where(and(eq(customers.id, existing.id), isNull(customers.userId)));
     }
-    prefixedPrompt = `[scenario] customer_email=${email}\n\n${parsed.data.prompt}`;
+
+    const priorContext = isFollowUp && conversationId
+      ? await buildConversationContext({ conversationId })
+      : '';
+
+    prefixedPrompt =
+      `[scenario] customer_email=${email}\n` +
+      `[conversation_id=${conversationId}]\n\n` +
+      priorContext +
+      parsed.data.prompt;
   }
 
   let id: string | undefined;
@@ -70,13 +135,23 @@ export async function POST(req: Request): Promise<Response> {
         ? { maxTurns: parsed.data.maxTurns }
         : {}),
       createdBy: 'http',
+      ...(conversationId ? { conversationId } : {}),
     });
     id = created.id;
 
-    // Phase 07: this dispatches an Inngest event instead of fire-and-
-    // forgetting in-process. Errors before the event is accepted (network,
-    // schema mismatch) are caught below; anything that goes wrong inside
-    // the orchestrator now bubbles through Inngest's retry semantics.
+    // Phase 11.5 — set the conversation title from the first user prompt
+    // (truncated) and bump updated_at so the sidebar re-orders.
+    if (conversationId) {
+      if (!isFollowUp) {
+        const title = parsed.data.prompt.replace(/\s+/g, ' ').trim().slice(0, 80);
+        if (title.length > 0) {
+          await setConversationTitle({ id: conversationId, title });
+        }
+      } else {
+        await touchConversation(conversationId);
+      }
+    }
+
     await startTask({
       taskId: created.id,
       prompt: prefixedPrompt,
@@ -91,6 +166,7 @@ export async function POST(req: Request): Promise<Response> {
     return Response.json(
       {
         taskId: created.id,
+        ...(conversationId ? { conversationId } : {}),
         status: 'queued' as const,
         createdAt: created.createdAt.toISOString(),
       },
@@ -99,8 +175,6 @@ export async function POST(req: Request): Promise<Response> {
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     console.error('[api/tasks] dispatch failed:', raw);
-    // If the task row was created but the Inngest send failed, finalize it
-    // to `failed` so the SSE stream terminates instead of polling forever.
     if (id) {
       try {
         await finalizeTask({ taskId: id, status: 'failed' });
@@ -108,10 +182,6 @@ export async function POST(req: Request): Promise<Response> {
         // ignore — original error is what we report
       }
     }
-    // Translate the most common dev-time misconfiguration into something the
-    // operator can actually act on. The raw "Inngest API Error: 401 Event key
-    // not found" only makes sense once you know that pnpm inngest:dev is the
-    // local broker and that the SDK falls back to Inngest Cloud without it.
     const isInngestAuth =
       /event key not found/i.test(raw) || /401/.test(raw);
     const message = isInngestAuth

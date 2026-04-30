@@ -13,6 +13,7 @@ import {
   uuid,
 } from 'drizzle-orm/pg-core';
 import { taskStatusEnum } from './enums';
+import { conversations } from './conversations';
 
 export const tasks = pgTable(
   'tasks',
@@ -21,6 +22,11 @@ export const tasks = pgTable(
     prompt: text('prompt').notNull(),
     status: taskStatusEnum('status').notNull().default('queued'),
     createdBy: text('created_by'),
+    // Phase 11.5 — optional link to a chat conversation. Tasks created from
+    // the chat surface set this; CLI / smoke-test tasks leave it null.
+    conversationId: uuid('conversation_id').references(() => conversations.id, {
+      onDelete: 'set null',
+    }),
     maxBudgetUsd: numeric('max_budget_usd', { precision: 10, scale: 4 }),
     maxTurns: integer('max_turns'),
     createdAt: timestamp('created_at', { withTimezone: true })
@@ -35,6 +41,7 @@ export const tasks = pgTable(
   (t) => [
     index('tasks_status_idx').on(t.status),
     index('tasks_created_at_idx').on(t.createdAt.desc()),
+    index('tasks_conversation_id_idx').on(t.conversationId),
   ],
 );
 
