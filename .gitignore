@@ -51,6 +51,9 @@ components/examples/
 
 # Testing
 /coverage
+# Phase 11 — Playwright captured auth state from tests/e2e/auth.setup.ts.
+# Contains a session cookie for the dev test user; never commit.
+tests/e2e/.auth/
 
 # TypeScript
 *.tsbuildinfo
