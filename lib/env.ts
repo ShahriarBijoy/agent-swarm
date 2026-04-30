@@ -4,6 +4,17 @@ const envSchema = z.object({
   DATABASE_URL: z.string().url().min(1),
   DATABASE_URL_UNPOOLED: z.string().url().min(1),
   GEMINI_API_KEY: z.string().min(1),
+  // Phase 11 — Better Auth + SSE token gate.
+  // Both 32-byte hex secrets generated via `openssl rand -hex 32`.
+  BETTER_AUTH_SECRET: z
+    .string()
+    .min(32, 'BETTER_AUTH_SECRET must be ≥32 chars (use `openssl rand -hex 32`)'),
+  BETTER_AUTH_URL: z.string().url().min(1),
+  SSE_TOKEN_SECRET: z
+    .string()
+    .min(32, 'SSE_TOKEN_SECRET must be ≥32 chars (use `openssl rand -hex 32`)'),
+  // Optional kill-switch for `/register` — set to '1' to disable sign-up.
+  BETTER_AUTH_SIGNUP_DISABLED: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
