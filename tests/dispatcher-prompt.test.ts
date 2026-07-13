@@ -52,4 +52,13 @@ describe('buildDispatcherPrompt', () => {
     expect(DISPATCHER_PREFIX).toContain('fleet-analyst');
     expect(DISPATCHER_PREFIX).toContain('propose_rental');
   });
+
+  it('the prefix forbids inventing infrastructure failures (failure-honesty guard)', () => {
+    // Regression guard for the phase-11.5 "domain server isn't reachable"
+    // hallucination: the dispatcher must relay verbatim errors, not diagnose
+    // infra, and must never fabricate results.
+    expect(DISPATCHER_PREFIX).toMatch(/verbatim/i);
+    expect(DISPATCHER_PREFIX).toMatch(/unreachable/i);
+    expect(DISPATCHER_PREFIX).toMatch(/never fabricate|not fabricate|do not fabricate/i);
+  });
 });

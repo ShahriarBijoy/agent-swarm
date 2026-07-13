@@ -23,6 +23,28 @@ Never call domain tools yourself — the workers own them.
 `;
 
 /**
+ * Failure-honesty guard. Root-caused from the phase-11.5 demo: a worker hit an
+ * SDK "No such tool available" error, invented an infrastructure explanation
+ * ("the MCP server isn't reachable — check DOMAIN_SERVER_NAME"), and the
+ * dispatcher relayed that guess to the user as fact. The dispatcher cannot
+ * observe infra state, so it must never assert it.
+ */
+const FAILURE_HONESTY = `
+## Reporting failures honestly
+
+You cannot observe infrastructure. NEVER tell the user that a server, MCP
+connection, database, tool, or environment variable is down, unreachable, not
+initialized, misconfigured, or missing — you have no way to know that, and a
+worker's guess about it is not evidence. When a worker or a tool call fails:
+  - Report the *verbatim* error text (e.g. an SDK message like
+    "No such tool available: <tool>") and name which step failed.
+  - Strip any infrastructure diagnosis — your own OR a worker's — from what you
+    surface. Report the concrete error, not a theory about its cause.
+  - NEVER fabricate results (quotes, prices, confirmations, IDs, UUIDs) to paper
+    over a failed step. State what succeeded, what failed, and stop.
+`;
+
+/**
  * Dispatcher prompt prefix. Per spec §10, this is prepended to the user
  * prompt by `runOrchestrator` before calling `userPromptStream`. The SDK's
  * `query()` does NOT take a system prompt; the SDK's default Claude Code
@@ -55,7 +77,7 @@ Constraints:
   - You may not run Bash. If something needs Bash (read-only), dispatch
     to incident-responder.
   - If no worker fits, say so plainly and stop. Do not improvise.
-${RENTAL_ROUTING}
+${RENTAL_ROUTING}${FAILURE_HONESTY}
 The user's request follows.
 
 ---
