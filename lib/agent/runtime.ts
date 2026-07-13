@@ -25,6 +25,7 @@ import {
 import { userPromptStream } from '@/lib/agent/approvals';
 import { buildDispatcherPrompt } from '@/lib/agent/dispatcher-prompt';
 import { AGENT_SOFT_BUDGET_USD } from '@/lib/agent/agents';
+import { assertDomainPreflight } from '@/lib/agent/preflight';
 
 export type RunOrchestratorArgs = {
   prompt: string;
@@ -138,6 +139,12 @@ export async function runOrchestrator(
   const agentByToolUseId = new Map<string, string>();
 
   try {
+    // Fail-fast: verify the domain MCP tools are wired into this run and the
+    // DB is reachable BEFORE the swarm starts. A real outage throws here with
+    // an honest message (finalized as a failed run below) instead of surfacing
+    // three agents deep as a hallucinated "domain server isn't reachable".
+    await assertDomainPreflight(options);
+
     // Phase 07: streaming-input mode. The SDK requires an AsyncIterable<
     // SDKUserMessage> as `prompt` whenever `canUseTool` is set; we pass the
     // single-message generator unconditionally so the contract is uniform.
