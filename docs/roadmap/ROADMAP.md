@@ -27,6 +27,7 @@ Phases 01→07 build a **vertical slice** (scaffold → schema → memory MCP �
 | 10.5 | **scenario simulator** | Customer chat at `/chat` → POST `/api/tasks` (reuses 06) → existing 11-agent swarm handles end-to-end. New tables: `vehicles` / `trips` / `customers` / `invoices`. Vehicle cards via `components/ui/deployment-card.tsx` (PNG previews from `public/vehicles/`). `/map` (mapcn / `components/ui/map.tsx`) shows live fleet. `/billing` shows invoices + accounts. Two seed scenarios: rent-a-vehicle, trip-status. Reshuffle (no new agents): extend prompts + add domain MCP tools for `fleet-analyst`, `route-optimizer`, `maintenance-planner`, `billing`, `support`, `analytics-reporter`, `incident-responder`, `compliance-auditor`. New HITL gate types: `rental-confirm`, `payment-charge`. | §3, §4, §7 |
 | 11 | **auth** | Better Auth + sessions + sign-up/login. Gate all routes except `/health` and `/login`. `EventSource` SSE auth via short-lived signed query-param token (no cookies on EventSource). | §7 |
 | 12 | **observability + deploy** | Langfuse via `@arizeai/openinference-instrumentation-claude-agent-sdk` + `@langfuse/otel` span processor (wired in sandbox process, not Vercel Functions). Vercel (webapp) + Vercel Sandbox **or** Fly.io (agent runtime — decide here) + CI. | §7, §8 |
+| 13 | **A2A + AG-UI** | Agent protocols on top of the swarm. **A2A v1.0** (`@a2a-js/sdk`): `fleet-analyst`, `route-optimizer` and `analytics-reporter` exposed as read-only A2A agents at `/api/a2a/<agent>` (JSON-RPC, blocking + streaming, Agent Cards at `/.well-known/agent-card.json`, bearer `A2A_API_KEY`, closed by default); dispatcher tool `delegate_to_remote_agent` for operator-configured external agents, always HITL-gated. **AG-UI 1.0** (`@ag-ui/core`): `POST /api/agui` runs the swarm from a `RunAgentInput`; `GET /api/tasks/[id]/agui` streams any task as AG-UI events (subagent-scoped). | — (post-plan) |
 
 ## Dependency graph
 
@@ -44,6 +45,7 @@ Phases 01→07 build a **vertical slice** (scaffold → schema → memory MCP �
        │                       └─ 10.5 scenario simulator (needs 08 + 10)
        │                           └─ 11 auth
        │                               └─ 12 observability + deploy
+                               └─ 13 A2A + AG-UI (needs 08 + 11; independent of 12)
 ```
 
 Phases 08, 09, 10 are parallel-safe once 07 lands — multiple worktrees OK per `gitworkflow.md`.
