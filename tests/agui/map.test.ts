@@ -124,7 +124,7 @@ describe('createAguiMapper', () => {
     for (const ev of workerEvents) {
       expect((ev as { subagentRunId?: string }).subagentRunId).toBe('toolu_agent');
     }
-    const started = m.map({ ...agentCall, payload: { ...agentCall.payload, tool_use_id: 'toolu_2' } })[0] as {
+    const started = m.map({ ...agentCall, payload: { ...agentCall.payload, tool_use_id: 'toolu_2' } })[0] as unknown as {
       name: string;
       description?: string;
     };

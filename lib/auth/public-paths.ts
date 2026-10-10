@@ -5,6 +5,7 @@
 // sense — they have their own auth mechanism:
 //   - /api/inngest        : signed by Inngest's signing key (not a session)
 //   - /api/tasks/[id]/stream : auth'd via ?token= HMAC, see lib/auth/sse-token.ts
+//   - /api/tasks/[id]/agui   : phase 13 AG-UI stream, same ?token= HMAC
 // They appear here only because the middleware can't 302 an Inngest webhook
 // or an EventSource (EventSource won't follow redirects, so it would treat
 // the 302 body as a stream parse error).
@@ -20,6 +21,7 @@ export const publicPaths: readonly RegExp[] = [
   /^\/api\/auth(\/.*)?$/, // Better Auth handler + sub-paths
   /^\/api\/inngest$/, // Inngest webhook (signed)
   /^\/api\/tasks\/[^/]+\/stream$/, // SSE — auth via ?token= query param
+  /^\/api\/tasks\/[^/]+\/agui$/, // Phase 13 AG-UI SSE — same ?token= HMAC
 ];
 
 export function isPublicPath(pathname: string): boolean {

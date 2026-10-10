@@ -22,6 +22,7 @@ describe('isPublicPath', () => {
       '/api/inngest',
       '/api/tasks/abc-123/stream',
       '/api/tasks/00000000-0000-0000-0000-000000000000/stream',
+      '/api/tasks/abc-123/agui', // phase 13 — AG-UI SSE, ?token= HMAC
     ];
     it.each(publicCases)('matches %s', (path) => {
       expect(isPublicPath(path)).toBe(true);
@@ -41,6 +42,8 @@ describe('isPublicPath', () => {
       '/api/tasks',
       '/api/tasks/abc-123',
       '/api/tasks/abc-123/stream-token', // session-gated mint route
+      '/api/agui', // phase 13 — AG-UI run endpoint is session-gated
+      '/api/tasks/abc-123/agui/leak',
       '/api/dashboard',
       '/api/vehicles',
       '/api/invoices',
