@@ -28,7 +28,8 @@
     "cleanup:run-once": "tsx --env-file=.env.local scripts/cleanup-run-once.ts",
     "seed:domain": "tsx --env-file=.env.local db/seed/domain.ts",
     "fix:fleet": "tsx --env-file=.env.local scripts/fix-fleet.ts",
-    "auth:reset-password": "tsx --env-file=.env.local scripts/auth-reset-password.ts"
+    "auth:reset-password": "tsx --env-file=.env.local scripts/auth-reset-password.ts",
+    "a2a:demo": "tsx --env-file=.env.local scripts/a2a-demo.ts"
   },
   "dependencies": {
     "@a2a-js/sdk": "1.2.1",

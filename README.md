@@ -320,6 +320,34 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 
     **Phase 11 PR scope also includes** a baseline cleanup commit that fixes 39 phase 10/10.5 typecheck errors and 13 pre-existing test failures (Collapsible-default-closed in the timeline renderers, missing TooltipProvider in widget tests, etc.) — see commit log.
 
+## Agent protocols: A2A and AG-UI (phase 13)
+
+Auto-Ride speaks two open agent protocols on top of its own task API.
+
+**A2A (Agent2Agent, protocol v1.0)** — other agents can call Auto-Ride workers, and the dispatcher can call other agents.
+
+| Direction | What | Where |
+|---|---|---|
+| Inbound | `fleet-analyst`, `route-optimizer`, `analytics-reporter` as A2A agents (JSON-RPC: `SendMessage`, `SendStreamingMessage`, `GetTask`, `CancelTask`) | `POST /api/a2a/<agent>` |
+| Discovery | Agent Cards (skills, examples, bearer auth scheme) | `/.well-known/agent-card.json` (fleet-analyst), `/api/a2a/<agent>/.well-known/agent-card.json` |
+| Outbound | Dispatcher tool `delegate_to_remote_agent` for agents listed in `A2A_REMOTE_AGENTS` | `lib/mcp/a2a.ts` |
+
+Guardrails: exposed workers are **read-only** (write tools stripped from the allowlist and denied in `canUseTool`, $0.25 cap per call); billing/support stay internal because they depend on the operator's approval loop; the endpoint needs `Authorization: Bearer $A2A_API_KEY` and answers 503 when the key is unset; outbound calls are never auto-allowed — every `mcp__a2a__*` call waits for one human approval, and the model can only pick a configured agent name, never a URL or token.
+
+```bash
+pnpm a2a:demo "Which electric vehicles are available right now?"
+curl -s localhost:3100/.well-known/agent-card.json | jq .skills
+```
+
+**AG-UI (Agent-User Interaction protocol 1.0)** — any AG-UI client (CopilotKit, `@ag-ui/client`'s `HttpAgent`) can drive or watch the swarm.
+
+| Endpoint | Auth | Does |
+|---|---|---|
+| `POST /api/agui` | session cookie | Takes a `RunAgentInput`, queues a normal swarm task (same Inngest path, HITL and budgets) and streams it back as AG-UI events, echoing the client's `threadId`/`runId` |
+| `GET /api/tasks/[id]/agui?token=` | 60 s HMAC token | Streams an existing task as AG-UI events |
+
+Mapping: dispatcher/worker text → `TEXT_MESSAGE_*`, tool calls → `TOOL_CALL_*` + `TOOL_CALL_RESULT`, each worker dispatch → `SUBAGENT_STARTED`/`FINISHED` (worker events carry `subagentRunId`), `run_result` → `RUN_FINISHED`/`RUN_ERROR`, open approval gate → `CUSTOM auto-ride.approval_required`. Every emitted event is validated against the official `@ag-ui/core` schemas in `tests/agui/`.
+
 ## Scripts
 
 | Script | Purpose |
@@ -340,7 +368,8 @@ An 11-agent Claude Agent SDK swarm with a three-bucket memory system and nightly
 | `pnpm cleanup:run-once` | Sends `auto-ride/cleanup.requested`; Inngest dev server invokes `memoryCleanupFn` once. Watch the run in the Inngest UI at [http://localhost:8288](http://localhost:8288). (phase 09) |
 | `pnpm seed:domain` | Seed 19-vehicle fleet + 25 customers + ~95 historical trips/invoices (phase 10.5) |
 | `pnpm auth:reset-password <email> <new-password>` | Reset a Better Auth user's password directly via the DB (phase 11) |
+| `pnpm a2a:demo [question]` | Ask the fleet-analyst a question over the A2A protocol, exactly as an external agent would (card discovery → JSON-RPC `SendMessage`). Needs `pnpm dev` and `A2A_API_KEY` (phase 13) |
 
 ## Phase status
 
-See [`docs/roadmap/ROADMAP.md`](./docs/roadmap/ROADMAP.md) for the 12-phase plan and the current open PR.
+See [`docs/roadmap/ROADMAP.md`](./docs/roadmap/ROADMAP.md) for the phase plan (01–12, plus 13: A2A + AG-UI) and the current open PR.
