@@ -23,6 +23,10 @@ describe('isPublicPath', () => {
       '/api/tasks/abc-123/stream',
       '/api/tasks/00000000-0000-0000-0000-000000000000/stream',
       '/api/tasks/abc-123/agui', // phase 13 — AG-UI SSE, ?token= HMAC
+      '/api/a2a/fleet-analyst', // phase 13 — A2A JSON-RPC, Bearer token
+      '/api/a2a/fleet-analyst/card',
+      '/api/a2a/route-optimizer/.well-known/agent-card.json',
+      '/.well-known/agent-card.json',
     ];
     it.each(publicCases)('matches %s', (path) => {
       expect(isPublicPath(path)).toBe(true);
@@ -44,6 +48,10 @@ describe('isPublicPath', () => {
       '/api/tasks/abc-123/stream-token', // session-gated mint route
       '/api/agui', // phase 13 — AG-UI run endpoint is session-gated
       '/api/tasks/abc-123/agui/leak',
+      '/api/a2a', // no agent segment
+      '/api/a2a/fleet-analyst/tasks', // nothing else under an agent is public
+      '/api/a2a/fleet-analyst/card/x',
+      '/.well-known/other.json',
       '/api/dashboard',
       '/api/vehicles',
       '/api/invoices',

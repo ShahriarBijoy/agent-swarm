@@ -6,6 +6,9 @@
 //   - /api/inngest        : signed by Inngest's signing key (not a session)
 //   - /api/tasks/[id]/stream : auth'd via ?token= HMAC, see lib/auth/sse-token.ts
 //   - /api/tasks/[id]/agui   : phase 13 AG-UI stream, same ?token= HMAC
+//   - /api/a2a/<agent>       : phase 13 A2A JSON-RPC, Bearer A2A_API_KEY
+//                              (closed with 503 when the key is unset)
+//   - A2A Agent Cards        : public by design (discovery), no secrets
 // They appear here only because the middleware can't 302 an Inngest webhook
 // or an EventSource (EventSource won't follow redirects, so it would treat
 // the 302 body as a stream parse error).
@@ -22,6 +25,9 @@ export const publicPaths: readonly RegExp[] = [
   /^\/api\/inngest$/, // Inngest webhook (signed)
   /^\/api\/tasks\/[^/]+\/stream$/, // SSE — auth via ?token= query param
   /^\/api\/tasks\/[^/]+\/agui$/, // Phase 13 AG-UI SSE — same ?token= HMAC
+  /^\/api\/a2a\/[a-z-]+$/, // Phase 13 A2A JSON-RPC — Bearer A2A_API_KEY
+  /^\/api\/a2a\/[a-z-]+\/(card|\.well-known\/agent-card\.json)$/, // A2A Agent Card
+  /^\/\.well-known\/agent-card\.json$/, // A2A host-level Agent Card
 ];
 
 export function isPublicPath(pathname: string): boolean {
