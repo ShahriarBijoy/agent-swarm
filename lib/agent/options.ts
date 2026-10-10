@@ -13,6 +13,7 @@ import {
   domainMcpServer,
 } from '@/lib/mcp/domain';
 import { agentRegistry } from '@/lib/agent/agents';
+import { A2A_SERVER_NAME, createA2AMcpServer, parseRemoteAgents } from '@/lib/mcp/a2a';
 import { auditPreToolUse } from '@/lib/agent/hooks';
 
 // Opus 4.7 full ID — full IDs ARE accepted on the orchestrator (only short
@@ -58,6 +59,11 @@ export type BuildOrchestratorOptionsOverrides = {
    * within `allowedTools` (phase-05 CLI path).
    */
   canUseTool?: CanUseTool;
+  /**
+   * Phase 13 — raw A2A_REMOTE_AGENTS JSON. Defaults to the env var; tests
+   * pass it explicitly. Unset/empty = no `a2a` MCP server at all.
+   */
+  remoteA2AAgents?: string;
 };
 
 /**
@@ -70,6 +76,9 @@ export type BuildOrchestratorOptionsOverrides = {
 export function buildOrchestratorOptions(
   overrides: BuildOrchestratorOptionsOverrides = {},
 ): Options {
+  const a2aServer = createA2AMcpServer(
+    parseRemoteAgents(overrides.remoteA2AAgents ?? process.env.A2A_REMOTE_AGENTS),
+  );
   return {
     model: ORCHESTRATOR_MODEL,
     agents: agentRegistry,
@@ -77,6 +86,10 @@ export function buildOrchestratorOptions(
     mcpServers: {
       [MEMORY_SERVER_NAME]: memoryMcpServer,
       [DOMAIN_SERVER_NAME]: domainMcpServer,
+      // Phase 13 — external A2A agents, only when the operator configured
+      // some. Deliberately NOT in allowedTools: every call goes through the
+      // canUseTool approval gate (see approval-policy.ts).
+      ...(a2aServer ? { [A2A_SERVER_NAME]: a2aServer } : {}),
     },
     hooks: {
       PreToolUse: [{ matcher: '.*', hooks: [auditPreToolUse] }],

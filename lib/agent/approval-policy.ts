@@ -58,6 +58,12 @@ export function shouldRequireApproval(
     return { require: true, reason: 'Payment tool — always gated.' };
   }
 
+  // 1b. Phase 13 — delegating to an external A2A agent sends swarm data to
+  //     another organisation's system. Always gated, whatever the agent.
+  if (toolName.startsWith('mcp__a2a__')) {
+    return { require: true, reason: 'external A2A agent call — operator must confirm what leaves the swarm.' };
+  }
+
   // 1a. Domain tools that mutate state are always gated.
   if (toolName === PROPOSE_RENTAL_FQN) {
     return { require: true, reason: 'rental booking — operator must confirm.' };
